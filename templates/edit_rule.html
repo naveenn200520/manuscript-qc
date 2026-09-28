@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Edit Rule - {{ rule.name }}{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    {% include '_sidebar.html' %}
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center gap-4 px-8 z-10">
+            <a href="{{ url_for('admin_rules') }}" class="text-slate-400 hover:text-slate-600">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+            </a>
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">Edit Rule</h1>
+                <p class="text-xs text-slate-500">{{ rule.name }} — v{{ rule.version }} → v{{ rule.version + 1 }}</p>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4">
+            <div class="max-w-2xl mx-auto bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                <form action="{{ url_for('edit_rule', rule_id=rule.id) }}" method="POST" class="space-y-5">
+                    <div class="grid grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Target Team *</label>
+                            <select name="team_id" required class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm">
+                                {% for team in teams %}<option value="{{ team.id }}" {% if team.id == rule.team_id %}selected{% endif %}>{{ team.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Rule Section</label>
+                            <select name="section" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                                <option value="">— Select —</option>
+                                {% for s in sections %}<option value="{{ s.name }}" {% if s.name == rule.section %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Rule Name *</label>
+                        <input type="text" name="name" value="{{ rule.name }}" required class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Rule Type</label>
+                            <select name="rule_type" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                                {% for rt in rule_types %}<option value="{{ rt }}" {% if rt == rule.rule_type %}selected{% endif %}>{{ rt }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Category *</label>
+                            <select name="category" required class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                                {% for cat in ['Style','Language','Formatting','Critical'] %}<option value="{{ cat }}" {% if cat == rule.category %}selected{% endif %}>{{ cat }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Scope</label>
+                        <input type="text" name="scope" value="{{ rule.scope or '' }}" placeholder="e.g. Article Title, Figure" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Find / Pattern *</label>
+                            <input type="text" name="find_pattern" value="{{ rule.find_pattern }}" required class="w-full px-4 py-2.5 rounded-lg border border-slate-200 font-mono text-sm focus:ring-2 focus:ring-red-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Replace With *</label>
+                            <input type="text" name="replacement" value="{{ rule.replacement }}" required class="w-full px-4 py-2.5 rounded-lg border border-slate-200 font-mono text-sm focus:ring-2 focus:ring-green-400 focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Expected Result</label>
+                        <input type="text" name="expected_result" value="{{ rule.expected_result or '' }}" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Exceptions</label>
+                        <input type="text" name="exceptions" value="{{ rule.exceptions or '' }}" placeholder="Country Names, Proper Nouns" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Severity</label>
+                            <select name="severity" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                                {% for sev in ['Style','Warning','Error'] %}<option value="{{ sev }}" {% if sev == rule.severity %}selected{% endif %}>{{ sev }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Priority</label>
+                            <select name="priority" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                                {% for p in ['Low','Medium','High'] %}<option value="{{ p }}" {% if p == rule.priority %}selected{% endif %}>{{ p }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Status</label>
+                            <select name="status" class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none text-sm">
+                                <option value="Active" {% if rule.status == 'Active' %}selected{% endif %}>Active</option>
+                                <option value="Inactive" {% if rule.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-100 flex gap-3 justify-end">
+                        <a href="{{ url_for('admin_rules') }}" class="px-5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">Cancel</a>
+                        <button type="submit" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium shadow shadow-brand-500/20 transition-colors">
+                            Save as v{{ rule.version + 1 }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

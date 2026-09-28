@@ -1,0 +1,1948 @@
+{% extends "base.html" %}
+
+{% block title %}QC Review - {{ project.name }}{% endblock %}
+
+{% block content %}
+<style>
+    /* ─── File Validator Theme ─── */
+    :root {
+        --fv-bg: #f8f9fb;
+        --fv-surface: #ffffff;
+        --fv-border: #e5e7eb;
+        --fv-border-light: #f0f1f3;
+        --fv-text: #1e293b;
+        --fv-text-secondary: #64748b;
+        --fv-text-muted: #94a3b8;
+
+        --fv-error: #dc2626;
+        --fv-error-bg: #fef2f2;
+        --fv-error-border: #fecaca;
+        --fv-warning: #d97706;
+        --fv-warning-bg: #fffbeb;
+        --fv-warning-border: #fde68a;
+        --fv-info: #2563eb;
+        --fv-info-bg: #eff6ff;
+        --fv-info-border: #bfdbfe;
+        --fv-success: #16a34a;
+        --fv-success-bg: #f0fdf4;
+
+        --fv-selected: #eff6ff;
+        --fv-selected-border: #3b82f6;
+        --fv-hover: #f8fafc;
+
+        --fv-line-num-bg: #f8f9fb;
+        --fv-gutter-border: #e5e7eb;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    .fv-app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: var(--fv-bg);
+        color: var(--fv-text);
+        font-family: 'Inter', -apple-system, system-ui, sans-serif;
+        overflow: hidden;
+    }
+
+    /* ═══ TOOLBAR ═══ */
+    .fv-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 52px;
+        padding: 0 24px;
+        background: var(--fv-surface);
+        border-bottom: 1px solid var(--fv-border);
+        flex-shrink: 0;
+        z-index: 20;
+    }
+
+    .fv-toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .fv-brand {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--fv-text);
+        letter-spacing: -0.02em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .fv-brand span {
+        color: var(--fv-info);
+        font-weight: 400;
+    }
+
+    .fv-toolbar-divider {
+        width: 1px;
+        height: 24px;
+        background: var(--fv-border);
+    }
+
+    .fv-filename {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--fv-text-secondary);
+        font-weight: 500;
+    }
+
+    .fv-filename svg {
+        width: 16px;
+        height: 16px;
+        color: var(--fv-text-muted);
+    }
+
+    .fv-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .fv-toolbar-stats {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-right: 12px;
+    }
+
+    .fv-stat-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+
+    .fv-stat-chip.error {
+        color: var(--fv-error);
+        background: var(--fv-error-bg);
+    }
+
+    .fv-stat-chip.warning {
+        color: var(--fv-warning);
+        background: var(--fv-warning-bg);
+    }
+
+    .fv-stat-chip.info {
+        color: var(--fv-info);
+        background: var(--fv-info-bg);
+    }
+
+    .fv-stat-chip.success {
+        color: var(--fv-success);
+        background: var(--fv-success-bg);
+    }
+
+    .fv-stat-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .fv-stat-dot.error {
+        background: var(--fv-error);
+    }
+
+    .fv-stat-dot.warning {
+        background: var(--fv-warning);
+    }
+
+    .fv-stat-dot.info {
+        background: var(--fv-info);
+    }
+
+    .fv-stat-dot.success {
+        background: var(--fv-success);
+    }
+
+    .fv-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--fv-border);
+        background: var(--fv-surface);
+        color: var(--fv-text);
+        cursor: pointer;
+        transition: all 0.15s;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .fv-btn:hover {
+        background: var(--fv-hover);
+        border-color: #d1d5db;
+    }
+
+    .fv-btn svg {
+        width: 15px;
+        height: 15px;
+    }
+
+    .fv-btn-primary {
+        background: var(--fv-info);
+        color: #fff;
+        border-color: var(--fv-info);
+    }
+
+    .fv-btn-primary:hover {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
+    }
+
+    .fv-btn-success {
+        background: var(--fv-success);
+        color: #fff;
+        border-color: var(--fv-success);
+    }
+
+    .fv-btn-success:hover {
+        background: #15803d;
+        border-color: #15803d;
+    }
+
+    /* ═══ MAIN CONTENT (Editor + Bottom Panel) ═══ */
+    .fv-main {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    /* ═══ EDITOR AREA ═══ */
+    .fv-editor-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--fv-surface);
+        border-bottom: 1px solid var(--fv-border);
+        min-height: 200px;
+    }
+
+    .fv-editor-tab-bar {
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        height: 36px;
+        background: var(--fv-bg);
+        border-bottom: 1px solid var(--fv-border);
+        flex-shrink: 0;
+    }
+
+    .fv-editor-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--fv-text-secondary);
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s;
+        margin-bottom: -1px;
+    }
+
+    .fv-editor-tab.active {
+        color: var(--fv-info);
+        border-bottom-color: var(--fv-info);
+        background: var(--fv-surface);
+    }
+
+    .fv-editor-tab svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .fv-editor-scroll {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: auto;
+        font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 22px;
+        background: var(--fv-surface);
+    }
+
+    .fv-line {
+        display: flex;
+        min-height: 22px;
+        position: relative;
+    }
+
+    .fv-line:hover {
+        background: #f8fafc;
+    }
+
+    .fv-line-num {
+        width: 56px;
+        flex-shrink: 0;
+        text-align: right;
+        padding-right: 16px;
+        color: var(--fv-text-muted);
+        font-size: 12px;
+        user-select: none;
+        background: var(--fv-line-num-bg);
+        border-right: 1px solid var(--fv-gutter-border);
+        line-height: 22px;
+    }
+
+    .fv-line-indicator {
+        width: 3px;
+        flex-shrink: 0;
+        background: transparent;
+    }
+
+    .fv-line-content {
+        flex: 1;
+        padding: 0 20px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 22px;
+        color: var(--fv-text);
+    }
+
+    /* Error line highlight */
+    .fv-line.fv-line-error {
+        background: var(--fv-error-bg);
+    }
+
+    .fv-line.fv-line-error .fv-line-indicator {
+        background: var(--fv-error);
+    }
+
+    .fv-line.fv-line-error .fv-line-num {
+        background: #fef2f2;
+        color: var(--fv-error);
+        font-weight: 600;
+    }
+
+    .fv-line.fv-line-warning {
+        background: var(--fv-warning-bg);
+    }
+
+    .fv-line.fv-line-warning .fv-line-indicator {
+        background: var(--fv-warning);
+    }
+
+    .fv-line.fv-line-warning .fv-line-num {
+        background: #fffbeb;
+        color: var(--fv-warning);
+        font-weight: 600;
+    }
+
+    .fv-line.fv-line-selected {
+        background: var(--fv-selected);
+    }
+
+    .fv-line.fv-line-selected .fv-line-indicator {
+        background: var(--fv-selected-border);
+    }
+
+    .fv-line.fv-line-selected .fv-line-num {
+        color: var(--fv-info);
+        font-weight: 600;
+    }
+
+    /* Inline error highlight */
+    .fv-err-span {
+        position: relative;
+        border-radius: 2px;
+        padding: 1px 2px;
+        cursor: pointer;
+    }
+
+    .fv-err-span.sev-CRITICAL {
+        background: rgba(220, 38, 38, 0.12);
+        border-bottom: 2px solid var(--fv-error);
+        text-decoration-color: var(--fv-error);
+    }
+
+    .fv-err-span.sev-REVIEW {
+        background: rgba(217, 119, 6, 0.1);
+        border-bottom: 2px solid var(--fv-warning);
+    }
+
+    .fv-err-span.sev-WARNING {
+        background: rgba(100, 116, 139, 0.08);
+        border-bottom: 2px dashed var(--fv-text-muted);
+    }
+
+    .fv-err-span.resolved {
+        opacity: 0.45;
+        border-bottom-style: dotted;
+        background: transparent;
+    }
+
+    .fv-err-span.selected-err {
+        outline: 2px solid var(--fv-selected-border);
+        outline-offset: 1px;
+        border-radius: 3px;
+    }
+
+    /* ═══ RESIZE HANDLE ═══ */
+    .fv-resize-handle {
+        height: 6px;
+        background: var(--fv-bg);
+        border-top: 1px solid var(--fv-border);
+        border-bottom: 1px solid var(--fv-border);
+        cursor: row-resize;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 10;
+    }
+
+    .fv-resize-handle::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 32px;
+        height: 3px;
+        border-radius: 2px;
+        background: #d1d5db;
+    }
+
+    .fv-resize-handle:hover::after,
+    .fv-resize-handle:active::after {
+        background: #94a3b8;
+    }
+
+    /* ═══ BOTTOM PANEL (Problems) ═══ */
+    .fv-panel {
+        display: flex;
+        flex-direction: column;
+        height: 280px;
+        min-height: 120px;
+        max-height: 60vh;
+        background: var(--fv-surface);
+        flex-shrink: 0;
+        overflow: hidden;
+    }
+
+    .fv-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--fv-border);
+        background: var(--fv-bg);
+        flex-shrink: 0;
+    }
+
+    .fv-panel-header-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .fv-panel-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--fv-text);
+    }
+
+    .fv-panel-counts {
+        font-size: 12px;
+        color: var(--fv-text-secondary);
+        font-weight: 500;
+    }
+
+    .fv-panel-filters {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .fv-filter-btn {
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--fv-text-secondary);
+        cursor: pointer;
+        transition: all 0.12s;
+    }
+
+    .fv-filter-btn:hover {
+        background: var(--fv-bg);
+        color: var(--fv-text);
+    }
+
+    .fv-filter-btn.active {
+        background: var(--fv-selected);
+        color: var(--fv-info);
+        border-color: var(--fv-info-border);
+    }
+
+    /* ─── Error Table ─── */
+    .fv-table-wrap {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: auto;
+    }
+
+    .fv-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .fv-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
+
+    .fv-table th {
+        background: var(--fv-bg);
+        padding: 8px 16px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--fv-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--fv-border);
+        white-space: nowrap;
+        user-select: none;
+    }
+
+    .fv-table th:first-child {
+        padding-left: 20px;
+    }
+
+    .fv-table td {
+        padding: 9px 16px;
+        border-bottom: 1px solid var(--fv-border-light);
+        color: var(--fv-text);
+        vertical-align: middle;
+    }
+
+    .fv-table td:first-child {
+        padding-left: 20px;
+    }
+
+    .fv-table tbody tr {
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+
+    .fv-table tbody tr:hover {
+        background: var(--fv-hover);
+    }
+
+    .fv-table tbody tr.fv-row-selected {
+        background: var(--fv-selected);
+        border-left: 3px solid var(--fv-selected-border);
+    }
+
+    .fv-table tbody tr.fv-row-selected td:first-child {
+        padding-left: 17px;
+    }
+
+    .fv-table tbody tr.fv-row-resolved {
+        opacity: 0.5;
+    }
+
+    /* Severity cell */
+    .fv-severity {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .fv-sev-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .fv-sev-dot.CRITICAL {
+        background: var(--fv-error);
+    }
+
+    .fv-sev-dot.REVIEW {
+        background: var(--fv-warning);
+    }
+
+    .fv-sev-dot.WARNING {
+        background: var(--fv-text-muted);
+    }
+
+    .fv-sev-label.CRITICAL {
+        color: var(--fv-error);
+    }
+
+    .fv-sev-label.REVIEW {
+        color: var(--fv-warning);
+    }
+
+    .fv-sev-label.WARNING {
+        color: var(--fv-text-muted);
+    }
+
+    .fv-msg-text {
+        max-width: 520px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--fv-text);
+        font-weight: 500;
+    }
+
+    .fv-rule-tag {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: var(--fv-bg);
+        color: var(--fv-text-secondary);
+        border: 1px solid var(--fv-border);
+        white-space: nowrap;
+    }
+
+    .fv-status-tag {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+    }
+
+    .fv-status-tag.OPEN {
+        background: var(--fv-error-bg);
+        color: var(--fv-error);
+    }
+
+    .fv-status-tag.RESTORED {
+        background: var(--fv-success-bg);
+        color: var(--fv-success);
+    }
+
+    .fv-status-tag.KEPT {
+        background: var(--fv-info-bg);
+        color: var(--fv-info);
+    }
+
+    .fv-status-tag.IGNORED {
+        background: var(--fv-bg);
+        color: var(--fv-text-muted);
+        border: 1px solid var(--fv-border);
+    }
+
+    .fv-status-tag.REVIEWED {
+        background: var(--fv-warning-bg);
+        color: var(--fv-warning);
+    }
+
+    /* ═══ DETAIL DRAWER (Right side) ═══ */
+    .fv-detail-drawer {
+        display: none;
+        background: var(--fv-surface);
+        border-left: 1px solid var(--fv-border);
+        flex-shrink: 0;
+        width: 350px;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .fv-detail-drawer.active {
+        display: flex !important;
+    }
+
+    .fv-detail-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding: 12px 16px;
+    }
+
+    .fv-detail-diff {
+        display: flex;
+        gap: 12px;
+        flex: 1;
+    }
+
+    .fv-diff-block {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .fv-diff-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--fv-text-muted);
+        margin-bottom: 6px;
+    }
+
+    .fv-diff-content {
+        font-family: 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 12px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid var(--fv-border);
+        min-height: 40px;
+    }
+
+    .fv-diff-original .fv-diff-content {
+        background: var(--fv-success-bg);
+        color: var(--fv-success);
+        border-color: #bbf7d0;
+    }
+
+    .fv-diff-edited .fv-diff-content {
+        background: var(--fv-error-bg);
+        color: var(--fv-error);
+        border-color: var(--fv-error-border);
+    }
+
+    .fv-detail-desc {
+        font-size: 13px;
+        color: var(--fv-text);
+        font-weight: 500;
+        margin-bottom: 10px;
+        line-height: 1.5;
+    }
+
+    .fv-detail-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex-shrink: 0;
+        min-width: 180px;
+    }
+
+    .fv-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid var(--fv-border);
+        cursor: pointer;
+        transition: all 0.12s;
+        width: 100%;
+        background: var(--fv-surface);
+        color: var(--fv-text);
+    }
+
+    .fv-action-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .fv-action-btn:hover {
+        background: var(--fv-hover);
+    }
+
+    .fv-action-restore {
+        background: var(--fv-success);
+        color: #fff;
+        border-color: var(--fv-success);
+    }
+
+    .fv-action-restore:hover {
+        background: #15803d;
+    }
+
+    .fv-action-keep {
+        color: var(--fv-info);
+        border-color: var(--fv-info);
+    }
+
+    .fv-action-keep:hover {
+        background: var(--fv-info-bg);
+    }
+
+    /* ═══ EXPORT DROPDOWN ═══ */
+    .fv-dropdown {
+        position: relative;
+        display: inline-flex;
+    }
+
+    .fv-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        background: var(--fv-surface);
+        border: 1px solid var(--fv-border);
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        min-width: 200px;
+        z-index: 999;
+        overflow: hidden;
+    }
+
+    .fv-dropdown.open .fv-dropdown-menu {
+        display: block;
+    }
+
+    .fv-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        text-decoration: none;
+        color: var(--fv-text);
+        font-size: 13px;
+        font-weight: 500;
+        transition: background 0.1s;
+    }
+
+    .fv-dropdown-item:hover {
+        background: var(--fv-hover);
+    }
+
+    .fv-dropdown-icon {
+        font-size: 16px;
+        width: 20px;
+        text-align: center;
+    }
+
+    .fv-dropdown-label {
+        font-size: 10px;
+        color: var(--fv-text-muted);
+    }
+
+    /* ═══ PROGRESS BAR ═══ */
+    .fv-progress-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .fv-progress-bar {
+        width: 100px;
+        height: 6px;
+        background: var(--fv-border);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .fv-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--fv-info), var(--fv-success));
+        border-radius: 3px;
+        transition: width 0.4s ease;
+    }
+
+    .fv-progress-text {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--fv-text-secondary);
+    }
+
+    /* Empty state */
+    .fv-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        text-align: center;
+    }
+
+    .fv-empty-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--fv-success-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+
+    .fv-empty-icon svg {
+        width: 22px;
+        height: 22px;
+        color: var(--fv-success);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #d1d5db;
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #9ca3af;
+    }
+
+    /* Compare Mode Styles */
+    .fv-err-inline.compare-edited {
+        background-color: rgba(220, 38, 38, 0.15);
+        border-bottom: 2px solid #dc2626;
+        color: #991b1b;
+    }
+
+    .fv-err-inline.compare-original {
+        background-color: rgba(22, 163, 74, 0.15);
+        border-bottom: 2px solid #16a34a;
+        color: #166534;
+    }
+
+    .fv-err-inline.compare-selected {
+        background-color: rgba(37, 99, 235, 0.2);
+        border-bottom: 2px solid #2563eb;
+        color: #1e40af;
+    }
+
+    /* ═══ CRITICAL BLOCKING BANNER ═══ */
+    .fv-critical-banner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 24px;
+        background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+        border-bottom: 2px solid #fca5a5;
+        font-size: 13px;
+        font-weight: 600;
+        color: #991b1b;
+        flex-shrink: 0;
+        z-index: 19;
+        animation: criticalPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes criticalPulse {
+
+        0%,
+        100% {
+            border-bottom-color: #fca5a5;
+        }
+
+        50% {
+            border-bottom-color: #dc2626;
+        }
+    }
+
+    .fv-critical-banner svg {
+        width: 20px;
+        height: 20px;
+        color: #dc2626;
+        flex-shrink: 0;
+    }
+
+    .fv-critical-banner .fv-cb-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #dc2626;
+        color: white;
+        border-radius: 10px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        min-width: 22px;
+    }
+
+    .fv-btn-blocked {
+        opacity: 0.5;
+        pointer-events: none;
+        position: relative;
+    }
+
+    .fv-btn-blocked::after {
+        content: '🔒';
+        position: absolute;
+        right: -4px;
+        top: -4px;
+        font-size: 10px;
+    }
+
+    /* Approve button */
+    .fv-action-approve {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #fff;
+        border-color: #d97706;
+    }
+
+    .fv-action-approve:hover {
+        background: linear-gradient(135deg, #d97706, #b45309);
+    }
+
+    /* Suggested action display */
+    .fv-suggested-action {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 8px 12px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        font-size: 12px;
+        color: #92400e;
+        margin-top: 8px;
+        line-height: 1.4;
+    }
+
+    .fv-suggested-action svg {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    /* Status tag for APPROVED */
+    .fv-status-tag.APPROVED {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+
+    /* Critical severity badge in Job Sheet modal */
+    .fv-severity-badge-critical {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+    }
+
+    /* Approve reason modal */
+    .fv-approve-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 200;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .fv-approve-modal.active {
+        display: flex;
+    }
+
+    .fv-approve-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        width: 460px;
+        max-width: 90vw;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+
+    .fv-approve-card h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .fv-approve-card p {
+        margin: 0 0 16px;
+        font-size: 13px;
+        color: #64748b;
+    }
+
+    .fv-approve-card textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 13px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 80px;
+        margin-bottom: 16px;
+    }
+
+    .fv-approve-card textarea:focus {
+        outline: none;
+        border-color: #d97706;
+        box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.1);
+    }
+
+    .fv-approve-btns {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+</style>
+
+<div class="fv-app">
+    <!-- ═══ CRITICAL ERROR BLOCKING BANNER ═══ -->
+    {% if critical_blocked %}
+    <div class="fv-critical-banner">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+        <span>Export Report, Final Submit, and Mark Done are blocked.</span>
+        <span class="fv-cb-count">{{ unapproved_critical_count }}</span>
+        <span>unresolved critical error(s) must be restored, corrected, or explicitly approved by an authorized
+            reviewer.</span>
+    </div>
+    {% endif %}
+
+    <!-- ═══ TOOLBAR ═══ -->
+    <header class="fv-toolbar">
+        <div class="fv-toolbar-left">
+            <a href="{{ url_for('dashboard') }}" class="fv-brand" style="text-decoration:none">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" style="width:18px;height:18px;color:var(--fv-info)">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+                Journal<span>Guard</span>
+            </a>
+
+            <div class="fv-toolbar-divider"></div>
+
+            <div class="fv-filename">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                {{ project.name }} · {{ project.team.name }}
+            </div>
+        </div>
+
+        <div class="fv-toolbar-right">
+            <div
+                style="display: flex; background: #e2e8f0; border-radius: 6px; padding: 2px; margin-right: 12px; font-size: 12px; font-weight: 600;">
+                <button id="btnReviewMode" class="fv-btn"
+                    style="border: none; background: white; color: var(--fv-text); padding: 4px 12px; height: 28px !important; min-height: 28px !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
+                    onclick="setCompareMode(false)">Review Mode</button>
+                <button id="btnCompareMode" class="fv-btn"
+                    style="border: none; background: transparent; color: var(--fv-text-secondary); padding: 4px 12px; height: 28px !important; min-height: 28px !important; box-shadow: none;"
+                    onclick="setCompareMode(true)">Compare Mode</button>
+            </div>
+            <div class="fv-toolbar-stats">
+                <span class="fv-stat-chip error"><span class="fv-stat-dot error"></span><span id="statCritical">{{
+                        critical_count }}</span> Errors</span>
+                <span class="fv-stat-chip warning"><span class="fv-stat-dot warning"></span><span id="statReview">{{
+                        review_count }}</span> Review</span>
+                <span class="fv-stat-chip info"><span class="fv-stat-dot info"></span><span id="statWarning">{{
+                        warning_count }}</span> Info</span>
+                <span class="fv-stat-chip success"><span class="fv-stat-dot success"></span><span id="statResolved">{{
+                        resolved_errors }}</span> Done</span>
+                <span class="fv-stat-chip"
+                    style="background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; font-size: 11px;">
+                    Rules applied: {{ manuscript.applied_rules_count }} of {{ manuscript.total_available_rules }}
+                    available
+                </span>
+            </div>
+
+            <div class="fv-progress-wrap">
+                <div class="fv-progress-bar">
+                    <div class="fv-progress-fill" id="progressFill" style="width:{{ progress }}%"></div>
+                </div>
+                <span class="fv-progress-text" id="progressText">{{ progress }}%</span>
+            </div>
+
+            {% if progress == 100 %}
+            <form action="{{ url_for('finalize_project', project_id=project.id) }}" method="POST"
+                style="display:inline">
+                <button type="submit" class="fv-btn fv-btn-success {{ 'fv-btn-blocked' if critical_blocked }}"
+                    {{ 'title=Blocked: unresolved critical errors' if critical_blocked }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    Finalize
+                </button>
+            </form>
+            {% else %}
+            <form action="{{ url_for('skip_all_errors', project_id=project.id) }}" method="POST" style="display:inline"
+                onsubmit="return confirm('Skip all remaining errors?')">
+                <button type="submit" class="fv-btn">Skip All</button>
+            </form>
+            {% endif %}
+
+            {% if project.job_sheet_id %}
+            <button class="fv-btn" onclick="document.getElementById('jobSheetPanel').style.display='flex'">Job
+                Sheet</button>
+            {% endif %}
+
+            <div class="fv-dropdown" id="exportDropdown">
+                <button class="fv-btn fv-btn-primary {{ 'fv-btn-blocked' if critical_blocked }}"
+                    onclick="{% if critical_blocked %}event.preventDefault();alert('Export blocked: unresolved critical errors must be resolved or approved first.'){% else %}toggleExport(event){% endif %}"
+                    {{ 'title=Blocked: unresolved critical errors' if critical_blocked }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Export Report
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5"
+                        stroke="currentColor" style="width:11px;height:11px;margin-left:2px">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                </button>
+                <div class="fv-dropdown-menu">
+                    <a href="{{ url_for('download_project', project_id=project.id, fmt='txt') }}"
+                        class="fv-dropdown-item">
+                        <span class="fv-dropdown-icon">📄</span>
+                        <div>
+                            <div style="font-weight:600">Plain Text</div>
+                            <div class="fv-dropdown-label">.txt format</div>
+                        </div>
+                    </a>
+                    <a href="{{ url_for('download_project', project_id=project.id, fmt='docx') }}"
+                        class="fv-dropdown-item">
+                        <span class="fv-dropdown-icon">📝</span>
+                        <div>
+                            <div style="font-weight:600">Word Document</div>
+                            <div class="fv-dropdown-label">.docx format</div>
+                        </div>
+                    </a>
+                    <a href="{{ url_for('download_project', project_id=project.id, fmt='xml') }}"
+                        class="fv-dropdown-item">
+                        <span class="fv-dropdown-icon">🗂️</span>
+                        <div>
+                            <div style="font-weight:600">XML</div>
+                            <div class="fv-dropdown-label">.xml format</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ MAIN ═══ -->
+    <div class="fv-main">
+        <!-- Editor -->
+        <div class="fv-editor-wrap" id="editorWrap" style="flex-direction: row; display: flex;">
+
+            <!-- Original Manuscript Pane (Hidden by Default) -->
+            <div id="originalEditorPane"
+                style="flex: 1; display: none; flex-direction: column; border-right: 1px solid var(--fv-border);">
+                <div class="fv-editor-tab-bar">
+                    <div class="fv-editor-tab active" style="color: var(--fv-text-muted);">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                        Original Manuscript
+                    </div>
+                </div>
+                <div class="fv-editor-scroll" id="originalEditorScroll">
+                    <!-- Lines rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Edited Manuscript Pane -->
+            <div id="editedEditorPane" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="fv-editor-tab-bar">
+                    <div class="fv-editor-tab active">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                        Edited Manuscript
+                    </div>
+                </div>
+                <div class="fv-editor-scroll" id="editorScroll">
+                    <!-- Lines rendered by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Resize Handle -->
+        <div class="fv-resize-handle" id="resizeHandle"></div>
+
+        <!-- Bottom Panel -->
+        <div class="fv-panel" id="problemPanel" style="display:flex; flex-direction:column;">
+            <div class="fv-panel-header">
+                <div class="fv-panel-header-left">
+                    <span class="fv-panel-title">Problems (<span id="openCount">{{ open_errors|length }}</span>)</span>
+                    <span class="fv-panel-counts" id="panelCounts">
+                        {{ critical_count }} Errors, {{ review_count }} Review, {{ warning_count }} Info
+                    </span>
+                </div>
+                <div class="fv-panel-filters">
+                    <button class="fv-filter-btn active" data-f="all" onclick="applyFilter('all',this)">All</button>
+                    <button class="fv-filter-btn" data-f="CRITICAL"
+                        onclick="applyFilter('CRITICAL',this)">Errors</button>
+                    <button class="fv-filter-btn" data-f="REVIEW" onclick="applyFilter('REVIEW',this)">Review</button>
+                    <button class="fv-filter-btn" data-f="WARNING" onclick="applyFilter('WARNING',this)">Info</button>
+                    <button class="fv-filter-btn" data-f="OPEN" onclick="applyFilter('OPEN',this)">Open Only</button>
+                </div>
+            </div>
+
+            <div style="display: flex; flex: 1; overflow: hidden; flex-direction: row;">
+                <!-- Table (Left side) -->
+                <div class="fv-table-wrap" id="tableWrap" style="flex: 1; overflow: auto;">
+                    <table class="fv-table">
+                        <thead>
+                            <tr>
+                                <th style="width:100px">Severity</th>
+                                <th>Message</th>
+                                <th style="width:64px">Line</th>
+                                <th style="width:64px">Col</th>
+                                <th style="width:170px">Rule / Type</th>
+                                <th style="width:90px">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="errBody">
+                            {% for error in errors %}
+                            <tr class="fv-err-row {{ 'fv-row-resolved' if error.status != 'OPEN' else '' }}"
+                                data-eid="{{ error.id }}" data-sev="{{ error.severity }}"
+                                data-status="{{ error.status }}" data-line="{{ error.line_number or 1 }}"
+                                data-col="{{ error.column_number or 1 }}" data-start="{{ error.start_offset }}"
+                                data-end="{{ error.end_offset }}" data-original="{{ error.original_text or '' }}"
+                                data-edited="{{ error.edited_text or '' }}" data-desc="{{ error.description or '' }}"
+                                data-etype="{{ error.error_type }}" data-ecode="{{ error.error_code or '' }}"
+                                data-suggested="{{ error.suggested_action or '' }}" data-field="{{ error.field or '' }}"
+                                onclick="selectRow(this)">
+                                <td>
+                                    <div class="fv-severity">
+                                        <span class="fv-sev-dot {{ error.severity }}"></span>
+                                        <span class="fv-sev-label {{ error.severity }}">
+                                            {% if error.severity == 'CRITICAL' %}Error{% elif error.severity == 'REVIEW'
+                                            %}Warning{% else %}Info{% endif %}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fv-msg-text">{{ error.description or 'Content difference detected.' }}
+                                    </div>
+                                    {% if error.suggested_action %}
+                                    <div style="font-size:10px;color:#92400e;margin-top:2px;font-style:italic">💡 {{
+                                        error.suggested_action }}</div>
+                                    {% endif %}
+                                </td>
+                                <td
+                                    style="text-align:center;color:var(--fv-text-secondary);font-weight:600;font-size:12px">
+                                    {{ error.line_number or '—' }}</td>
+                                <td style="text-align:center;color:var(--fv-text-secondary);font-size:12px">{{
+                                    error.column_number or '—' }}</td>
+                                <td>
+                                    <span class="fv-rule-tag">{{ error.error_code or error.error_type }}</span>
+                                    {% if error.field %}
+                                    <div style="font-size:10px;color:#64748b;margin-top:2px">{{ error.field }}</div>
+                                    {% endif %}
+                                </td>
+                                <td><span class="fv-status-tag {{ error.status }}" data-status-tag>{{ error.status
+                                        }}</span></td>
+                            </tr>
+                            {% endfor %}
+
+                            {% if not errors %}
+                            <tr>
+                                <td colspan="6">
+                                    <div class="fv-empty">
+                                        <div class="fv-empty-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                                stroke-width="2" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <p style="font-weight:600;color:var(--fv-success);margin:0">No problems found
+                                        </p>
+                                        <p style="font-size:12px;color:var(--fv-text-muted);margin:4px 0 0">The
+                                            manuscript passed all QC checks.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Detail Drawer (Right side) -->
+                <div class="fv-detail-drawer" id="detailDrawer">
+                    <div class="fv-detail-inner">
+                        <div style="flex:1;min-width:0">
+                            <div class="fv-detail-desc" id="drawerDesc"
+                                style="margin-bottom: 12px; font-weight: 500; color: var(--fv-text);"></div>
+                            <div class="fv-detail-diff" style="flex-direction: column;">
+                                <div class="fv-diff-block fv-diff-original"
+                                    style="border-right: none; border-bottom: 1px solid var(--fv-border-light);">
+                                    <div class="fv-diff-label">✓ Expected (Original)</div>
+                                    <div class="fv-diff-content" id="drawerOriginal"></div>
+                                </div>
+                                <div class="fv-diff-block fv-diff-edited">
+                                    <div class="fv-diff-label">✗ Found (Current)</div>
+                                    <div class="fv-diff-content" id="drawerEdited"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="fv-detail-actions" id="drawerActions"
+                            style="border-left: none; padding-left: 0; padding-top: 16px; border-top: 1px solid var(--fv-border-light);">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        'use strict';
+
+        const manuscriptText = {{ manuscript.working_text | tojson
+    }};
+    const originalText = {{ manuscript.original_text | default ('') | tojson }};
+    const lines = manuscriptText.split('\n');
+    const origLines = originalText.split('\n');
+    const projectId = {{ project.id }};
+    let selectedEid = null;
+    let isCompareMode = false;
+
+    // ─── RENDER EDITOR ───
+    const editor = document.getElementById('editorScroll');
+    const origEditor = document.getElementById('originalEditorScroll');
+
+    function escapeHtml(t) {
+        const d = document.createElement('div');
+        d.textContent = t;
+        return d.innerHTML;
+    }
+
+    function renderEditor() {
+        let html = '';
+        for (let i = 0; i < lines.length; i++) {
+            const n = i + 1;
+            const c = escapeHtml(lines[i]) || '&nbsp;';
+            html += `<div class="fv-line" id="ln-${n}" data-ln="${n}">` +
+                `<span class="fv-line-num">${n}</span>` +
+                `<span class="fv-line-indicator"></span>` +
+                `<span class="fv-line-content">${c}</span></div>`;
+        }
+        editor.innerHTML = html;
+
+        let origHtml = '';
+        for (let i = 0; i < origLines.length; i++) {
+            const n = i + 1;
+            const c = escapeHtml(origLines[i]) || '&nbsp;';
+            origHtml += `<div class="fv-line" id="oln-${n}" data-ln="${n}">` +
+                `<span class="fv-line-num">${n}</span>` +
+                `<span class="fv-line-indicator"></span>` +
+                `<span class="fv-line-content">${c}</span></div>`;
+        }
+        if (origEditor) origEditor.innerHTML = origHtml;
+    }
+
+    // Toggle Mode
+    window.setCompareMode = function (mode) {
+        isCompareMode = mode;
+        const btnR = document.getElementById('btnReviewMode');
+        const btnC = document.getElementById('btnCompareMode');
+        const origPane = document.getElementById('originalEditorPane');
+
+        if (mode) {
+            btnC.style.background = 'white';
+            btnC.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+            btnC.style.color = 'var(--fv-text)';
+            btnR.style.background = 'transparent';
+            btnR.style.boxShadow = 'none';
+            btnR.style.color = 'var(--fv-text-secondary)';
+            if (origPane) origPane.style.display = 'flex';
+        } else {
+            btnR.style.background = 'white';
+            btnR.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+            btnR.style.color = 'var(--fv-text)';
+            btnC.style.background = 'transparent';
+            btnC.style.boxShadow = 'none';
+            btnC.style.color = 'var(--fv-text-secondary)';
+            if (origPane) origPane.style.display = 'none';
+        }
+        applyHighlights();
+    };
+
+    // Sync Scroll
+    if (editor && origEditor) {
+        editor.addEventListener('scroll', () => { if (isCompareMode) origEditor.scrollTop = editor.scrollTop; });
+        origEditor.addEventListener('scroll', () => { if (isCompareMode) editor.scrollTop = origEditor.scrollTop; });
+    }
+
+    // ─── APPLY HIGHLIGHTS ───
+    function applyHighlights() {
+        renderEditor();
+        const rows = document.querySelectorAll('.fv-err-row');
+        const byLine = {};
+
+        rows.forEach(r => {
+            const ln = parseInt(r.dataset.line) || 1;
+            const s = parseInt(r.dataset.start);
+            const e = parseInt(r.dataset.end);
+            const sev = r.dataset.sev;
+            const st = r.dataset.status;
+            const eid = r.dataset.eid;
+            const oText = r.dataset.original || '';
+            if (!byLine[ln]) byLine[ln] = [];
+            byLine[ln].push({ s, e, sev, st, eid, oText });
+        });
+
+        for (const [ln, errs] of Object.entries(byLine)) {
+            const lineEl = document.getElementById(`ln-${ln}`);
+            if (!lineEl) continue;
+
+            const hasOpen = errs.some(e => e.st === 'OPEN');
+            if (hasOpen) {
+                const hasCrit = errs.some(e => e.sev === 'CRITICAL' && e.st === 'OPEN');
+                const hasReview = errs.some(e => e.sev === 'REVIEW' && e.st === 'OPEN');
+                if (hasCrit) lineEl.classList.add('fv-line-error');
+                else if (hasReview) lineEl.classList.add('fv-line-warning');
+            }
+
+            const isSelected = errs.some(e => e.eid == selectedEid);
+            if (isSelected) {
+                lineEl.classList.remove('fv-line-error', 'fv-line-warning');
+                lineEl.classList.add('fv-line-selected');
+
+                const oLineEl = document.getElementById(`oln-${ln}`);
+                if (oLineEl) oLineEl.classList.add('fv-line-selected');
+            }
+
+            const contentEl = lineEl.querySelector('.fv-line-content');
+            const lineText = lines[parseInt(ln) - 1] || '';
+            let lineStart = 0;
+            for (let i = 0; i < parseInt(ln) - 1; i++) lineStart += lines[i].length + 1;
+
+            errs.sort((a, b) => b.s - a.s);
+            let currentEnd = lineText.length;
+            let htmlContent = "";
+
+            for (const err of errs) {
+                const rs = Math.max(0, err.s - lineStart);
+                const re = err.e - lineStart;
+                if (rs >= currentEnd) continue; // Skip if swallowed
+
+                let ce = Math.min(re, lineText.length);
+                ce = Math.min(ce, currentEnd); // Prevent overlap
+                if (ce <= rs) continue;
+
+                if (ce < currentEnd) {
+                    htmlContent = escapeHtml(lineText.substring(ce, currentEnd)) + htmlContent;
+                }
+
+                const part = escapeHtml(lineText.substring(rs, ce));
+                let cls = `fv-err-span sev-${err.sev}`;
+                if (err.st !== 'OPEN') cls += ' resolved';
+                if (err.eid == selectedEid) cls += ' selected-err';
+
+                if (isCompareMode && err.st === 'OPEN') {
+                    cls = 'fv-err-inline compare-edited';
+                    if (err.eid == selectedEid) cls = 'fv-err-inline compare-selected';
+                }
+
+                htmlContent = `<span class="${cls}" data-eid="${err.eid}" onclick="selectById('${err.eid}')">${part}</span>` + htmlContent;
+                currentEnd = rs;
+            }
+
+            if (currentEnd > 0) {
+                htmlContent = escapeHtml(lineText.substring(0, currentEnd)) + htmlContent;
+            }
+
+            contentEl.innerHTML = htmlContent;
+
+            if (isCompareMode) {
+                const oLineEl = document.getElementById(`oln-${ln}`);
+                if (oLineEl) {
+                    const oContentEl = oLineEl.querySelector('.fv-line-content');
+                    const oLineText = origLines[parseInt(ln) - 1] || '';
+                    let oHtmlContent = escapeHtml(oLineText);
+
+                    for (const err of errs) {
+                        if (err.st !== 'OPEN') continue;
+                        if (!err.oText) continue;
+
+                        const escOText = escapeHtml(err.oText);
+                        const idx = oHtmlContent.indexOf(escOText);
+                        if (idx !== -1) {
+                            const endIdx = idx + escOText.length;
+                            let oCls = 'fv-err-inline compare-original';
+                            if (err.eid == selectedEid) oCls = 'fv-err-inline compare-selected';
+
+                            const pre = oHtmlContent.substring(0, idx);
+                            const mid = oHtmlContent.substring(idx, endIdx);
+                            const post = oHtmlContent.substring(endIdx);
+                            oHtmlContent = pre + `<span class="${oCls}">${mid}</span>` + post;
+                        }
+                    }
+                    oContentEl.innerHTML = oHtmlContent;
+                }
+            }
+        }
+    }
+
+    applyHighlights();
+
+    // ─── SELECT ROW ───
+    window.selectRow = function (row) {
+        document.querySelectorAll('.fv-err-row.fv-row-selected').forEach(r => r.classList.remove('fv-row-selected'));
+        // fv-line-selected is cleared by applyHighlights re-rendering
+
+        row.classList.add('fv-row-selected');
+        selectedEid = row.dataset.eid;
+
+        const ln = parseInt(row.dataset.line) || 1;
+        const etype = row.dataset.etype;
+        const status = row.dataset.status;
+        const original = row.dataset.original;
+        const edited = row.dataset.edited;
+
+        applyHighlights();
+
+        setTimeout(() => {
+            const lineEl = document.getElementById(`ln-${ln}`);
+            if (lineEl) lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            const oLineEl = document.getElementById(`oln-${ln}`);
+            if (oLineEl) oLineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 10);
+
+        const drawer = document.getElementById('detailDrawer');
+        drawer.classList.add('active');
+
+        document.getElementById('drawerOriginal').textContent = original || '—';
+        document.getElementById('drawerEdited').textContent = edited || '—';
+
+        // Show suggested action if present
+        const suggested = row.dataset.suggested;
+        const field = row.dataset.field;
+        const ecode = row.dataset.ecode;
+        let descHtml = escapeHtml(row.dataset.desc || '');
+        if (field) {
+            descHtml = `<span style="display:inline-block;padding:2px 6px;background:#f1f5f9;border-radius:4px;font-size:10px;font-weight:700;color:#475569;margin-right:6px">${escapeHtml(field)}</span>` + descHtml;
+        }
+        if (ecode) {
+            descHtml = `<span style="display:inline-block;padding:2px 6px;background:#fef2f2;border-radius:4px;font-size:10px;font-weight:700;color:#dc2626;margin-right:6px">${escapeHtml(ecode)}</span>` + descHtml;
+        }
+        document.getElementById('drawerDesc').innerHTML = descHtml;
+
+        // Suggested action block
+        let suggestedHtml = '';
+        if (suggested) {
+            suggestedHtml = `<div class="fv-suggested-action"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg><span><strong>Suggested:</strong> ${escapeHtml(suggested)}</span></div>`;
+        }
+
+        const actEl = document.getElementById('drawerActions');
+        if (status === 'OPEN') {
+            const isCritical = row.dataset.sev === 'CRITICAL';
+            const restoreLabel = etype.includes('JOB_SHEET') ? 'Apply Fix' : 'Restore Original';
+            let btns = `
+                <button class="fv-action-btn fv-action-restore" onclick="resolveErr(${selectedEid},'RESTORE_ORIGINAL')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+                    ${restoreLabel}
+                </button>
+                <button class="fv-action-btn fv-action-keep" onclick="resolveErr(${selectedEid},'KEEP_EDIT')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                    Keep Edit
+                </button>
+                <button class="fv-action-btn" onclick="resolveErr(${selectedEid},'IGNORE')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Dismiss
+                </button>
+                <button class="fv-action-btn" onclick="resolveErr(${selectedEid},'MARK_REVIEWED')" style="color:var(--fv-warning);border-color:var(--fv-warning)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Reviewed
+                </button>`;
+            // Add Approve Critical button for critical errors (admin/team_leader only)
+            if (isCritical) {
+                btns += `
+                <button class="fv-action-btn fv-action-approve" onclick="showApproveModal(${selectedEid})">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+                    Approve Critical
+                </button>`;
+            }
+            actEl.innerHTML = suggestedHtml + btns;
+        } else {
+            actEl.innerHTML = suggestedHtml + `<span class="fv-status-tag ${status}" style="text-align:center;padding:10px;font-size:13px;width:100%">${status}</span>`;
+        }
+
+        applyHighlights();
+    };
+
+    window.selectById = function (eid) {
+        const row = document.querySelector(`.fv-err-row[data-eid="${eid}"]`);
+        if (row) selectRow(row);
+    };
+
+    // ─── RESOLVE ERROR ───
+    window.resolveErr = function (eid, action) {
+        fetch(`/errors/${eid}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ action }),
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const row = document.querySelector(`.fv-err-row[data-eid="${eid}"]`);
+                    if (row) {
+                        row.dataset.status = data.new_status;
+                        row.classList.add('fv-row-resolved');
+                        const tag = row.querySelector('[data-status-tag]');
+                        if (tag) { tag.className = `fv-status-tag ${data.new_status}`; tag.textContent = data.new_status; }
+                    }
+                    const actEl = document.getElementById('drawerActions');
+                    actEl.innerHTML = `<span class="fv-status-tag ${data.new_status}" style="text-align:center;padding:10px;font-size:13px;width:100%">${data.new_status}</span>`;
+                    applyHighlights();
+                    updateStats();
+                }
+            })
+            .catch(e => console.error('Resolve error:', e));
+    };
+
+    function updateStats() {
+        const rows = document.querySelectorAll('.fv-err-row');
+        let open = 0, crit = 0, rev = 0, warn = 0, resolved = 0;
+        rows.forEach(r => {
+            if (r.dataset.status === 'OPEN') {
+                open++;
+                if (r.dataset.sev === 'CRITICAL') crit++;
+                if (r.dataset.sev === 'REVIEW') rev++;
+                if (r.dataset.sev === 'WARNING') warn++;
+            } else resolved++;
+        });
+
+        document.getElementById('openCount').textContent = open;
+        document.getElementById('statCritical').textContent = crit;
+        document.getElementById('statReview').textContent = rev;
+        document.getElementById('statWarning').textContent = warn;
+        document.getElementById('statResolved').textContent = resolved;
+        document.getElementById('panelCounts').textContent = `${crit} Errors, ${rev} Review, ${warn} Info`;
+
+        const total = rows.length;
+        const pct = total > 0 ? Math.round((resolved / total) * 100) : 100;
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('progressText').textContent = pct + '%';
+    }
+
+    // ─── FILTER ───
+    window.applyFilter = function (f, btn) {
+        document.querySelectorAll('.fv-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.fv-err-row').forEach(row => {
+            let show = true;
+            if (f === 'CRITICAL' || f === 'REVIEW' || f === 'WARNING') show = row.dataset.sev === f;
+            else if (f === 'OPEN') show = row.dataset.status === 'OPEN';
+            row.style.display = show ? '' : 'none';
+        });
+    };
+
+    // ─── RESIZE HANDLE ───
+    const handle = document.getElementById('resizeHandle');
+    const panel = document.getElementById('problemPanel');
+    const editorWrap = document.getElementById('editorWrap');
+    let isResizing = false;
+
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const appRect = document.querySelector('.fv-app').getBoundingClientRect();
+        const toolbarH = 52;
+        const handleH = 6;
+        const minPanel = 120;
+        const minEditor = 200;
+        const y = e.clientY - appRect.top - toolbarH;
+        const available = appRect.height - toolbarH - handleH;
+        const panelH = available - y;
+        if (panelH >= minPanel && y >= minEditor) {
+            panel.style.height = panelH + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+
+    // ─── AUTO-SELECT FIRST OPEN ───
+    const firstOpen = document.querySelector('.fv-err-row:not(.fv-row-resolved)');
+    if (firstOpen) setTimeout(() => selectRow(firstOpen), 250);
+
+}) ();
+
+    // ─── EXPORT DROPDOWN ───
+    window.toggleExport = function (e) {
+        e.stopPropagation();
+        document.getElementById('exportDropdown').classList.toggle('open');
+    };
+    document.addEventListener('click', () => {
+        const dd = document.getElementById('exportDropdown');
+        if (dd) dd.classList.remove('open');
+    });
+    // ─── APPROVE CRITICAL MODAL ───
+    window.showApproveModal = function (eid) {
+        const modal = document.getElementById('approveModal');
+        document.getElementById('approveEid').value = eid;
+        document.getElementById('approveReason').value = '';
+        modal.classList.add('active');
+    };
+
+    window.hideApproveModal = function () {
+        document.getElementById('approveModal').classList.remove('active');
+    };
+
+    window.submitApproval = function () {
+        const eid = document.getElementById('approveEid').value;
+        const reason = document.getElementById('approveReason').value;
+        fetch(`/errors/${eid}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ action: 'APPROVE_CRITICAL', reason: reason }),
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const row = document.querySelector(`.fv-err-row[data-eid="${eid}"]`);
+                    if (row) {
+                        row.dataset.status = data.new_status;
+                        row.classList.add('fv-row-resolved');
+                        const tag = row.querySelector('[data-status-tag]');
+                        if (tag) { tag.className = `fv-status-tag ${data.new_status}`; tag.textContent = data.new_status; }
+                    }
+                    const actEl = document.getElementById('drawerActions');
+                    actEl.innerHTML = `<span class="fv-status-tag APPROVED" style="text-align:center;padding:10px;font-size:13px;width:100%">APPROVED</span>`;
+                    hideApproveModal();
+                    applyHighlights();
+                    updateStats();
+                }
+            })
+            .catch(e => console.error('Approve error:', e));
+    };
+</script>
+
+<!-- Approve Critical Modal -->
+<div class="fv-approve-modal" id="approveModal">
+    <div class="fv-approve-card">
+        <h3>⚠️ Approve Critical Error</h3>
+        <p>You are about to approve a critical error, allowing Export, Finalize, and Mark Done to proceed even though
+            this error is unresolved. Please provide a reason for this approval.</p>
+        <input type="hidden" id="approveEid" value="">
+        <textarea id="approveReason" placeholder="Enter reason for approval (required for audit trail)..."></textarea>
+        <div class="fv-approve-btns">
+            <button class="fv-btn" onclick="hideApproveModal()">Cancel</button>
+            <button class="fv-btn fv-action-approve" onclick="submitApproval()" style="border:none;padding:8px 20px">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" style="width:14px;height:14px">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                </svg>
+                Confirm Approval
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Job Sheet Panel Modal -->
+<div id="jobSheetPanel"
+    style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center;">
+    <div
+        style="background: white; border-radius: 12px; width: 900px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);">
+        <div
+            style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 15px; font-weight: 600; color: #1e293b;">Job Sheet Rules</h2>
+            <button onclick="document.getElementById('jobSheetPanel').style.display='none'"
+                style="background: transparent; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
+        </div>
+        <div style="padding: 0; overflow-y: auto; flex: 1; background: #f8fafc;">
+            <table class="fv-table" style="background: white;">
+                <thead>
+                    <tr>
+                        <th>Rule Name</th>
+                        <th>Rule Section</th>
+                        <th>Scope</th>
+                        <th>Expected Result</th>
+                        <th>Status</th>
+                        <th>Issues Found</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in assigned_rules_stats %}
+                    <tr>
+                        <td style="font-weight: 500;">
+                            {{ stat.name }}
+                            {% if stat.severity is defined and stat.severity == 'Critical' %}
+                            <span class="fv-severity-badge-critical">Critical</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ stat.section }}</td>
+                        <td>{{ stat.scope }}</td>
+                        <td
+                            style="font-family: monospace; font-size: 12px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">
+                            {{ stat.expected }}</td>
+                        <td>
+                            <span
+                                class="fv-stat-chip {% if stat.status == 'Applied' %}{% if stat.severity is defined and stat.severity == 'Critical' %}error{% else %}success{% endif %}{% else %}warning{% endif %}"
+                                style="display: inline-flex;">
+                                {{ stat.status }}
+                            </span>
+                        </td>
+                        <td
+                            style="text-align: center; font-weight: 600; color: {% if stat.issues > 0 %}#ef4444{% else %}#10b981{% endif %};">
+                            {{ stat.issues }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 16px; color: #64748b;">No rules assigned
+                            from Job Sheet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

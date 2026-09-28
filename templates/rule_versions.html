@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Rule Version History - {{ rule.name }}{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    {% include '_sidebar.html' %}
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center gap-4 px-8 z-10">
+            <a href="{{ url_for('admin_rules') }}" class="text-slate-400 hover:text-slate-600">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+            </a>
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">Version History</h1>
+                <p class="text-xs text-slate-500">{{ rule.name }} — Current: v{{ rule.version }}</p>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4">
+            <div class="max-w-3xl mx-auto space-y-4">
+                <!-- Current version -->
+                <div class="bg-brand-50 border border-brand-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-bold text-brand-700 bg-brand-100 px-2 py-0.5 rounded">CURRENT — v{{ rule.version }}</span>
+                        <span class="text-xs text-slate-500">{{ rule.updated_at.strftime('%Y-%m-%d %H:%M') if rule.updated_at else '' }}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div><span class="font-medium text-slate-600">Find:</span> <code class="bg-red-50 text-red-700 px-1.5 py-0.5 rounded ml-1">{{ rule.find_pattern }}</code></div>
+                        <div><span class="font-medium text-slate-600">Replace:</span> <code class="bg-green-50 text-green-700 px-1.5 py-0.5 rounded ml-1">{{ rule.replacement }}</code></div>
+                        <div><span class="font-medium text-slate-600">Section:</span> <span class="text-slate-800 ml-1">{{ rule.section or '—' }}</span></div>
+                        <div><span class="font-medium text-slate-600">Severity:</span> <span class="text-slate-800 ml-1">{{ rule.severity or '—' }}</span></div>
+                    </div>
+                </div>
+                <!-- Historical versions -->
+                {% for v in versions %}
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">v{{ v.version }}</span>
+                        <span class="text-xs text-slate-400">{{ v.saved_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                    {% set snap = v.snapshot_json | fromjson %}
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div><span class="font-medium text-slate-600">Find:</span> <code class="bg-red-50 text-red-700 px-1.5 py-0.5 rounded ml-1">{{ snap.find_pattern }}</code></div>
+                        <div><span class="font-medium text-slate-600">Replace:</span> <code class="bg-green-50 text-green-700 px-1.5 py-0.5 rounded ml-1">{{ snap.replacement }}</code></div>
+                        <div><span class="font-medium text-slate-600">Section:</span> <span class="text-slate-800 ml-1">{{ snap.section or '—' }}</span></div>
+                        <div><span class="font-medium text-slate-600">Severity:</span> <span class="text-slate-800 ml-1">{{ snap.severity or '—' }}</span></div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-center text-slate-400 text-sm py-8">No previous versions. This rule has not been edited yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

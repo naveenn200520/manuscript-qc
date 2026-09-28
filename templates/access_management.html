@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Access Management - Manuscript QC{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    {% include '_sidebar.html' %}
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center px-8 z-10">
+            <h1 class="text-xl font-bold text-slate-800">Access Management</h1>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4">
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <h2 class="font-semibold text-slate-800">User Permissions</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Manage individual access levels per user. Admin always has full access.</p>
+                </div>
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                            <th class="py-3 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
+                            <th class="py-3 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Teams</th>
+                            <th class="py-3 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Style Rules</th>
+                            <th class="py-3 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Manuscripts</th>
+                            <th class="py-3 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for user in users %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-4 px-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs">{{ user.name[0] }}</div>
+                                    <div>
+                                        <p class="font-medium text-slate-800">{{ user.name }}</p>
+                                        <p class="text-xs text-slate-500">{{ user.employee_code }}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-6">
+                                <span class="inline-flex px-2 py-0.5 rounded text-xs font-bold
+                                    {% if user.role == 'team_leader' %}bg-blue-100 text-blue-700
+                                    {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                    {{ user.role|replace('_',' ')|title }}
+                                </span>
+                            </td>
+                            <td class="py-4 px-6">
+                                <div class="flex flex-wrap gap-1">
+                                    {% for team in user.teams %}
+                                    <span class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">{{ team.name }}</span>
+                                    {% else %}<span class="text-xs text-slate-400">No teams</span>{% endfor %}
+                                </div>
+                            </td>
+                            <td class="py-4 px-6">
+                                {% set sr_perm = user.permissions | selectattr('resource', 'equalto', 'style_rules') | first %}
+                                <span class="text-xs font-medium px-2 py-0.5 rounded
+                                    {% if sr_perm and sr_perm.level == 'EDIT' %}bg-emerald-100 text-emerald-700
+                                    {% elif sr_perm and sr_perm.level == 'VIEW' %}bg-blue-100 text-blue-700
+                                    {% else %}bg-slate-100 text-slate-500{% endif %}">
+                                    {{ sr_perm.level if sr_perm else 'NO_ACCESS' }}
+                                </span>
+                            </td>
+                            <td class="py-4 px-6">
+                                {% set ms_perm = user.permissions | selectattr('resource', 'equalto', 'manuscripts') | first %}
+                                <span class="text-xs font-medium px-2 py-0.5 rounded
+                                    {% if ms_perm and ms_perm.level == 'EDIT' %}bg-emerald-100 text-emerald-700
+                                    {% elif ms_perm and ms_perm.level == 'VIEW' %}bg-blue-100 text-blue-700
+                                    {% else %}bg-slate-100 text-slate-500{% endif %}">
+                                    {{ ms_perm.level if ms_perm else 'NO_ACCESS' }}
+                                </span>
+                            </td>
+                            <td class="py-4 px-6">
+                                <a href="{{ url_for('manage_user_access', user_id=user.id) }}"
+                                   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                                    Manage Access
+                                </a>
+                            </td>
+                        </tr>
+
+                        {% else %}
+                        <tr><td colspan="6" class="py-6 text-center text-slate-400 text-sm">No non-admin users found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

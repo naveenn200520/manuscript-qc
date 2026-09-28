@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}403 — Access Denied{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div class="text-center">
+        <div class="w-20 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10 text-red-600">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-800 mb-2">Access Denied</h1>
+        <p class="text-slate-500 mb-4">You don't have permission to access this resource.<br>Contact your administrator if you believe this is a mistake.</p>
+        <a href="{{ url_for('dashboard') }}" class="inline-flex items-center gap-2 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors shadow shadow-brand-500/20">
+            Return to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

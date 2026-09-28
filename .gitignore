@@ -1,0 +1,4 @@
+.vercel
+.venv/ 
+__pycache__/ 
+qc_platform.db

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Reference Styles - Manuscript QC{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    {% include '_sidebar.html' %}
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-10">
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">Reference Styles</h1>
+                <p class="text-xs text-slate-500 font-medium tracking-wide uppercase">
+                    {% if is_admin %}Admin — Full Access{% else %}Read-Only{% endif %}
+                </p>
+            </div>
+            {% if is_admin %}
+            <button onclick="document.getElementById('addStyleModal').classList.remove('hidden')"
+                    class="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm shadow shadow-brand-500/20 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                New Reference Style
+            </button>
+            {% endif %}
+        </header>
+        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+            {% for style in styles %}
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" /></svg>
+                        </div>
+                        <div>
+                            <h2 class="font-semibold text-slate-800">{{ style.name }}</h2>
+                            <p class="text-xs text-slate-500">{{ style.description or 'No description' }} — {{ style.rules|length }} rules</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs px-2 py-0.5 rounded-full {% if style.is_active %}bg-emerald-50 text-emerald-700{% else %}bg-slate-100 text-slate-500{% endif %} font-medium">
+                            {% if style.is_active %}Active{% else %}Inactive{% endif %}
+                        </span>
+                        {% if is_admin %}
+                        <button onclick="document.getElementById('addRuleModal_{{ style.id }}').classList.remove('hidden')"
+                                class="text-xs px-3 py-1.5 border border-brand-200 text-brand-700 rounded-lg hover:bg-brand-50 transition-colors">
+                            + Add Rule
+                        </button>
+                        <form action="{{ url_for('deactivate_reference_style', style_id=style.id) }}" method="POST" class="inline"
+                              onsubmit="return confirm('Deactivate this reference style?')">
+                            <button type="submit" class="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors">Deactivate</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if style.rules %}
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="py-2 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
+                            <th class="py-2 px-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Rule</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for rule in style.rules %}
+                        {% if rule.is_active %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-3 px-6 font-medium text-slate-700 w-48">{{ rule.category }}</td>
+                            <td class="py-3 px-6 text-slate-600">{{ rule.rule_text }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="p-4 text-sm text-slate-400 text-center">No rules defined yet.</p>
+                {% endif %}
+            </div>
+            <!-- Add Rule Modal for each style -->
+            {% if is_admin %}
+            <div id="addRuleModal_{{ style.id }}" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-4">
+                    <h3 class="font-semibold text-slate-800 mb-4">Add Rule to "{{ style.name }}"</h3>
+                    <form action="{{ url_for('add_reference_rule', style_id=style.id) }}" method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                            <select name="category" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none">
+                                {% for cat in ['Author format','Article title','Journal name','Journal abbreviation','Year','Volume','Issue','Pages','DOI','URL','Punctuation','Capitalization','Et al.','Citation numbering','Special exceptions'] %}
+                                <option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Rule Text</label>
+                            <textarea name="rule_text" rows="3" placeholder="Describe the rule..." required class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"></textarea>
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" onclick="document.getElementById('addRuleModal_{{ style.id }}').classList.add('hidden')"
+                                    class="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+                            <button type="submit" class="flex-1 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">Add Rule</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+
+            {% if not styles %}
+            <div class="text-center py-16 text-slate-400">
+                <p class="text-lg font-medium">No reference styles defined yet.</p>
+                {% if is_admin %}<p class="text-sm mt-1">Click "New Reference Style" to get started.</p>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<!-- Add Style Modal -->
+{% if is_admin %}
+<div id="addStyleModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-4">
+        <h3 class="font-semibold text-slate-800 mb-4">New Reference Style</h3>
+        <form action="{{ url_for('reference_styles') }}" method="POST" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Style Name *</label>
+                <input type="text" name="name" placeholder="e.g. Basic, Style 2" required class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea name="description" rows="2" placeholder="Brief description..." class="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm resize-none"></textarea>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="document.getElementById('addStyleModal').classList.add('hidden')"
+                        class="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="submit" class="flex-1 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

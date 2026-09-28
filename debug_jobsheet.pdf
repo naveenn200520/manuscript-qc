@@ -1,0 +1,180 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE JobSheet PUBLIC "-//Springer-Verlag//DTD A++ V2.4//EN" "http://devel.springer.de/A++/V2.4/DTD/A++V2.4JobSheetV2.4.1.dtd">
+<JobSheet JobSheetDate="2026-08-25 06:35:24" Supplier="FullServiceVendor" ObjectID="09022549a1140bf8" Version="2.4.1">
+   <ArticleJobSheet>
+      <PublisherInfo>
+         <PublisherName>Springer International Publishing</PublisherName>
+         <PublisherLocation>Cham</PublisherLocation>
+         <PublisherImprintName>Springer</PublisherImprintName>
+      </PublisherInfo>
+      <JournalInfo JournalProductType="ArchiveJournal" NumberingStyle="Unnumbered" OutputMedium="All">
+         <JournalID>11739</JournalID>
+         <JournalDOI>10.1007/11739.1970-9366</JournalDOI>
+         <JournalPrintISSN>1828-0447</JournalPrintISSN>
+         <JournalElectronicISSN>1970-9366</JournalElectronicISSN>
+         <JournalSPIN>32079760</JournalSPIN>
+         <JournalTitle>Internal and Emergency Medicine</JournalTitle>
+         <JournalSubTitle>Official Journal of the Italian Society of Internal Medicine</JournalSubTitle>
+         <JournalAbbreviatedTitle>Intern Emerg Med</JournalAbbreviatedTitle>
+         <JournalSubjectGroup>
+            <JournalSubject Type="Primary" Code="SCH">Medicine &amp; Public Health</JournalSubject>
+            <JournalSubject Type="Secondary" Code="SCH33002" Priority="1">Internal Medicine</JournalSubject>
+            <SubjectCollection Code="SC11">Medicine</SubjectCollection>
+         </JournalSubjectGroup>
+      </JournalInfo>
+      <ArticleInfo ArticleType="Report" ContainsESM="No" NumberingStyle="Name and year" TocLevels="0" OutputMedium="All" Language="En">
+         <ArticleID>4513</ArticleID>
+         <ArticleDOI>10.1007/s11739-026-04513-9</ArticleDOI>
+         <ArticleTitle Language="En">Acute cholestatic jaundice and coagulopathy in a middle-aged woman</ArticleTitle>
+         <ArticleCategory>IM - CASE RECORD</ArticleCategory>
+         <ArticleHistory>
+            <RegistrationDate>
+               <Year>2026</Year>
+               <Month>8</Month>
+               <Day>24</Day>
+            </RegistrationDate>
+            <Received>
+               <Year>2026</Year>
+               <Month>6</Month>
+               <Day>7</Day>
+            </Received>
+            <Accepted>
+               <Year>2026</Year>
+               <Month>8</Month>
+               <Day>23</Day>
+            </Accepted>
+         </ArticleHistory>
+         <ArticleCopyright>
+            <CopyrightHolderName>The Author(s), under exclusive licence to Società Italiana di Medicina Interna (SIMI)</CopyrightHolderName>
+            <CopyrightYear>2026</CopyrightYear>
+         </ArticleCopyright>
+         <ArticleGrants Type="Regular">
+            <MetadataGrant Grant="OpenAccess"/>
+            <AbstractGrant Grant="OpenAccess"/>
+            <BodyPDFGrant Grant="Restricted"/>
+            <BodyHTMLGrant Grant="Restricted"/>
+            <BibliographyGrant Grant="Restricted"/>
+            <ESMGrant Grant="OpenAccess"/>
+         </ArticleGrants>
+      </ArticleInfo>
+      <AuthorGroup>
+         <Author ORCID="http://orcid.org/0000-0001-8991-3743">
+            <AuthorName DisplayOrder="Western">
+               <Prefix>Dr</Prefix>
+               <GivenName>Cátia</GivenName>
+               <FamilyName>Barra</FamilyName>
+            </AuthorName>
+            <Contact>
+               <Email>cat_barra@hotmail.com</Email>
+            </Contact>
+         </Author>
+      </AuthorGroup>
+      <ProductionInfo>
+         <SPACEInfo PublicationObjectID="09022549a1140bf8"/>
+         <ManuscriptInfo>
+            <EditorialManuscriptNumber>IAEM-D-26-01106R2</EditorialManuscriptNumber>
+            <ElectronicDelivery Delivery="Complete"/>
+            <PostalDelivery Delivery="None"/>
+         </ManuscriptInfo>
+         <ProductionEditor>
+            <ProductionEditorName>
+               <GivenName>Kamala</GivenName>
+               <FamilyName>Srinivasan</FamilyName>
+            </ProductionEditorName>
+            <Contact>
+               <Email>kamala.srinivasan@springernature.com</Email>
+            </Contact>
+         </ProductionEditor>
+         <ContactPerson>
+            <ContactPersonName>
+               <GivenName>Elizaveta</GivenName>
+               <FamilyName>Ilves</FamilyName>
+            </ContactPersonName>
+            <Contact>
+               <Email>elizaveta.ilves@springernature.com</Email>
+            </Contact>
+         </ContactPerson>
+         <TechnicalInfo>
+            <TitleUpperCase Letters="InitialWord"/>
+            <AuthorInformationStyle Biography="No" Photograph="No" CapturePrefix="No"/>
+            <HistoryStyle Accepted="Yes" Received="Yes" Revised="No"/>
+            <BibliographyStyle Type="Basic"/>
+            <CitationStyle Type="Name and year"/>
+            <Typesetting Layout="Large" RunningHead="Standard" LogoOnFirstPage="No"/>
+            <TextSpecifications GutterMargin="18 mm" HeadMargin="12 mm" Bleeds="None" TypeareaHeight="251.5 mm" TypeareaWidth="174 mm" PaperStock="Coated Matt"/>
+            <ColorSpecifications LayoutColorCount="1">
+               <LayoutColorName>Black</LayoutColorName>
+            </ColorSpecifications>
+            <FormatTrimSize TrimWidthMm="210" TrimHeightMm="279" TrimWidthInch="8.25" TrimHeightInch="10.875">210 x 279 mm</FormatTrimSize>
+            <FixedArticleStructure Type="No"/>
+            <ContinuousArticlePublishing Type="No"/>
+            <ArticleCategoryAllCaps Type="No"/>
+            <eProofing Type="Yes"/>
+            <ExtendedOnlineOnlyPDF Type="NotPermitted"/>
+            <FullStopAfterFigureCaption Type="No"/>
+            <IncludeArticleTOC Type="Permitted"/>
+            <IncludeAuthorContribution Type="Permitted"/>
+            <IncludeCodeAvailability Type="Permitted"/>
+            <IncludeCommunicatedBy Type="Permitted"/>
+            <IncludeCompetingInterests Type="Required"/>
+            <IncludeDataAvailability Type="Desired"/>
+            <IncludeEditorialSummary Type="Permitted"/>
+            <IncludeESMDescription Type="Permitted"/>
+            <IncludeESMListInPDF Type="NotPermitted"/>
+            <IncludeExtendedData Type="Permitted"/>
+            <IncludeFundingInformation Type="Permitted"/>
+            <IncludeGlossary Type="Permitted"/>
+            <IncludeGraphicalAbstract Type="Permitted"/>
+            <IncludeGraphicalAbstractCaption Type="Permitted"/>
+            <IncludeGraphicalAbstractPDF Type="Yes"/>
+            <IncludeMapsDisclaimer Type="Yes"/>
+            <IncludeMaterialsAvailability Type="Permitted"/>
+            <IncludePeerReview Type="Permitted"/>
+            <IncludeSourceData Type="Permitted"/>
+            <KeywordCount Minimum="0" Maximum="Permitted"/>
+            <OmitFirstHeading Type="No"/>
+            <PlainLanguageAbstract Type="Permitted"/>
+            <ReportingSummaryInPDF Type="NotPermitted"/>
+            <SendRevisedProof Type="No"/>
+            <LanguageQualityScore Type="SlimmerLanguage">0.773293731052631</LanguageQualityScore>
+         </TechnicalInfo>
+         <DiscreteObjectTechnicalInfo ColorInPrint="Yes" ContainsColorImages="No"/>
+         <WorkflowInfo TaskType="PrepareContent">
+            <Priority Level="Standard"/>
+            <Deadline>
+               <OnlineFirstDeadline>
+                  <Year>2026</Year>
+                  <Month>9</Month>
+                  <Day>16</Day>
+               </OnlineFirstDeadline>
+            </Deadline>
+            <Supplier>
+               <FullServiceVendor>
+                  <CompanyName>Scientific Publishing Services Ltd.</CompanyName>
+                  <Contact>
+                     <Street>Rangoon Street</Street>
+                     <City>Chennai</City>
+                     <Country>India</Country>
+                     <Phone>+91444219 7750</Phone>
+                     <Email>space@straive.com</Email>
+                  </Contact>
+                  <CopyEditing Category="2"/>
+                  <FilesToSupplier>
+                     <ContentFiles>
+                        <File>
+                           <Archive Content="Manuscript" FileRef="IAEM-D-26-01106.zip" ObjectID="09022549a10df743"/>
+                        </File>
+                     </ContentFiles>
+                  </FilesToSupplier>
+                  <Deliverables>
+                     <DeliverablesForDiscreteObjects AuthorFeedbackPDF="No" CopyrightTransfer="No" CorrectionSheet="IfApplies" DeltaPDF="Yes" eBookPDF="No" EpsilonPDF="No" Manuscript="No" OffprintOrder="No" OnlineMediaObjects="IfApplies" OnlinePDF="Yes" AuthorAcceptedManuscriptPDF="No" OpenAccessStatement="No" PeerReviewPDFs="No" Pit-Stop-Reports="Yes" PrintMediaObjects="No" PrintPDF="No" PRS-Metadata="No" ReferencePDF="Yes" TEX="No" XMLWithBody="Yes" XMLWithBodyRefsOnly="No"/>
+                  </Deliverables>
+                  <FilesToPublisher>
+                     <ToBeCompleted/>
+                  </FilesToPublisher>
+               </FullServiceVendor>
+            </Supplier>
+         </WorkflowInfo>
+      </ProductionInfo>
+   </ArticleJobSheet>
+</JobSheet>

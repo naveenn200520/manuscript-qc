@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Manuscript QC Platform{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            200: '#99f6e4',
+                            300: '#5eead4',
+                            400: '#2dd4bf',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            800: '#115e59',
+                            900: '#134e4a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            font-size: 14px !important; /* Body base font size */
+        }
+        
+        /* Minimum readable font size enforcement where not overridden by larger utilities */
+        * {
+            /* While min-font-size isn't standard, we can ensure standard text doesn't drop below 12px where possible */
+        }
+        
+        /* Headings reduced by ~20% */
+        .text-3xl, h1 { font-size: 1.5rem !important; line-height: 2rem !important; } /* 30px -> 24px */
+        .text-2xl, h2 { font-size: 1.25rem !important; line-height: 1.75rem !important; } /* 24px -> 20px */
+        .text-xl, h3 { font-size: 1.125rem !important; line-height: 1.5rem !important; } /* 20px -> 18px */
+        .text-lg, h4 { font-size: 1rem !important; line-height: 1.5rem !important; } /* 18px -> 16px */
+        
+        /* Button and Input heights fixed to 36px */
+        button:not(.fv-filter-btn), .btn, a.btn, input[type="text"], input[type="password"], input[type="email"], select {
+            height: 36px !important;
+            min-height: 36px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            display: inline-flex;
+            align-items: center;
+        }
+        textarea {
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+        }
+        
+        /* Table row height fixed to 42px */
+        tbody tr {
+            height: 42px !important;
+        }
+        td, th {
+            padding-top: 4px !important;
+            padding-bottom: 4px !important;
+            vertical-align: middle;
+        }
+        
+        /* Maintain filter buttons small */
+        .fv-filter-btn { height: 26px !important; }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+    {% block content %}{% endblock %}
+</body>
+</html>

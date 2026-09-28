@@ -1,0 +1,14 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Werkzeug==3.0.3
+celery==5.4.0
+redis==5.0.7
+pytest==8.2.2
+mammoth
+pyspellchecker
+python-docx
+lxml
+pdfplumber
+gunicorn 
+waitress

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Manage Access — {{ target_user.name }}{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    {% include '_sidebar.html' %}
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center gap-4 px-8 z-10">
+            <a href="{{ url_for('access_management') }}" class="text-slate-400 hover:text-slate-600">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+            </a>
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">Manage Access</h1>
+                <p class="text-xs text-slate-500">{{ target_user.name }} · {{ target_user.employee_code }} · <span class="capitalize">{{ target_user.role|replace('_',' ') }}</span></p>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto p-4">
+            <form action="{{ url_for('manage_user_access', user_id=target_user.id) }}" method="POST" class="max-w-2xl mx-auto space-y-6">
+                <!-- Team Access -->
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                    <h2 class="font-semibold text-slate-800 mb-1">Team Access</h2>
+                    <p class="text-xs text-slate-500 mb-4">Select which teams this user can access.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        {% for team in teams %}
+                        <label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer hover:border-brand-300 transition-colors {% if team.id in user_team_ids %}border-brand-300 bg-brand-50{% else %}border-slate-200{% endif %}">
+                            <input type="checkbox" name="team_ids" value="{{ team.id }}"
+                                   {% if team.id in user_team_ids %}checked{% endif %}
+                                   class="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500">
+                            <span class="text-sm font-medium text-slate-700">{{ team.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Resource Permissions -->
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                    <h2 class="font-semibold text-slate-800 mb-1">Resource Permissions</h2>
+                    <p class="text-xs text-slate-500 mb-4">Set the access level for each resource type. These are enforced at the backend API level.</p>
+                    <div class="space-y-3">
+                        {% set resource_labels = {
+                            'style_rules': 'Style Rules',
+                            'reference_styles': 'Reference Styles',
+                            'job_sheets': 'Job Sheets',
+                            'manuscripts': 'Manuscripts',
+                            'qc_results': 'QC Results'
+                        } %}
+                        {% for resource in resources %}
+                        <div class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">{{ resource_labels.get(resource, resource) }}</p>
+                            </div>
+                            <div class="flex gap-1 rounded-lg overflow-hidden border border-slate-200">
+                                {% for level in levels %}
+                                <label class="relative cursor-pointer">
+                                    <input type="radio" name="perm_{{ resource }}" value="{{ level }}"
+                                           {% if existing_perms.get(resource, 'NO_ACCESS') == level %}checked{% endif %}
+                                           class="sr-only peer">
+                                    <span class="block px-4 py-1.5 text-xs font-medium transition-colors
+                                        peer-checked:{% if level == 'EDIT' %}bg-emerald-600 text-white{% elif level == 'VIEW' %}bg-brand-600 text-white{% else %}bg-red-100 text-red-700{% endif %}
+                                        {% if existing_perms.get(resource, 'NO_ACCESS') != level %}text-slate-600 hover:bg-slate-50{% endif %}">
+                                        {{ level|replace('_',' ') }}
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="flex gap-3 justify-end">
+                    <a href="{{ url_for('access_management') }}" class="px-5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</a>
+                    <button type="submit" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium shadow shadow-brand-500/20">
+                        Save Permissions
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+{% endblock %}

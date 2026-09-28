@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: manuscript-qc
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -w 4 --timeout 120 app:app"
+    disk:
+      name: sqlite-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
