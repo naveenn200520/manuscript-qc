@@ -43,16 +43,33 @@ def _make_critical_error(error_code, original_value, current_value,
       - Rule ID (error_code)
       - Suggested action
     """
-    line, col = _offset_to_line_col(full_text, start_offset) if full_text else (page_or_line, column_or_field)
+    # If offset not explicitly provided or is 0, try to locate current_value or original_value in full_text
+    if full_text and (start_offset is None or start_offset <= 0):
+        if current_value and isinstance(current_value, str) and current_value in full_text:
+            pos = full_text.find(current_value)
+            if pos >= 0:
+                start_offset = pos
+                end_offset = pos + len(current_value)
+        elif original_value and isinstance(original_value, str) and original_value in full_text:
+            pos = full_text.find(original_value)
+            if pos >= 0:
+                start_offset = pos
+                end_offset = pos + len(original_value)
+
+    if full_text and start_offset is not None and start_offset >= 0:
+        line, col = _offset_to_line_col(full_text, start_offset)
+    else:
+        line = page_or_line if isinstance(page_or_line, int) else 1
+        col = column_or_field if isinstance(column_or_field, int) else 1
 
     return {
         'error_type': error_code,
         'severity': 'CRITICAL',
         'category': 'CRITICAL',
-        'line_number': page_or_line if page_or_line else line,
-        'column_number': column_or_field if column_or_field else col,
-        'start_offset': start_offset,
-        'end_offset': end_offset,
+        'line_number': line,
+        'column_number': col,
+        'start_offset': start_offset if start_offset is not None else 0,
+        'end_offset': end_offset if end_offset is not None else 0,
         'original_text': str(original_value) if original_value is not None else '',
         'edited_text': str(current_value) if current_value is not None else '',
         'context_before': '',
@@ -78,7 +95,7 @@ _REFERENCE_SECTION_HEADERS = [
 
 
 def _find_reference_section(text):
-    """Return (start_offset, ref_section_text) or (None, None)."""
+    """Return (start_offset, ref_section_text) or (None, None). Truncates before Tables/Figures."""
     best_match = None
     for pat in _REFERENCE_SECTION_HEADERS:
         matches = list(re.finditer(pat, text, re.MULTILINE))
@@ -89,7 +106,17 @@ def _find_reference_section(text):
                 best_match = m
     
     if best_match:
-        return best_match.start(), text[best_match.start():]
+        ref_text = text[best_match.start():]
+        header_len = best_match.end() - best_match.start()
+        after_header = ref_text[header_len:]
+        end_match = re.search(
+            r'(?im)^\s*(?:Table\s+\d+|Figure\s+\d+|Fig\.\s*\d+|Tables\b|Figures\b|Appendix|Supplementary|SUPPLEMENTARY|APPENDIX)\b',
+            after_header
+        )
+        if end_match:
+            trunc_point = header_len + end_match.start()
+            return best_match.start(), ref_text[:trunc_point]
+        return best_match.start(), ref_text
     return None, None
 
 
@@ -99,16 +126,23 @@ def _extract_reference_entries(ref_text):
     Handles numbered references like:
       [1] Author ...
       1. Author ...
-      1  Author ...
-    And author-year references (un-numbered paragraphs).
+      1) Author ...
+    And filters out non-citation text like table rows.
     """
     entries = []
-    # Numbered: [1], 1., 1)  at the start of a line
-    num_pat = re.compile(r'^[ \t]*\[?(\d+)\]?[.\):]?\s+(.+)', re.MULTILINE)
+    num_pat = re.compile(
+        r'^[ \t]*(?:\[(\d{1,4})\]|(\d{1,4})[.)]\s+)\s*(\S.+)',
+        re.MULTILINE
+    )
     for m in num_pat.finditer(ref_text):
+        num_str = m.group(1) or m.group(2)
+        content = m.group(3).strip()
+        alpha_count = sum(1 for c in content if c.isalpha())
+        if len(content) < 15 or alpha_count < 10:
+            continue
         entries.append({
-            'number': int(m.group(1)),
-            'text': m.group(2).strip(),
+            'number': int(num_str),
+            'text': content,
             'offset': m.start(),
             'full_match': m.group(0),
         })
@@ -126,16 +160,14 @@ def _extract_body_text(full_text):
 def _extract_citation_order_from_body(body_text):
     """Scan the body text and return citation numbers in the order they first appear.
 
-    Handles: [1], [1,2], [1-3], (1), superscript-like patterns.
-    Returns a list of ints in first-appearance order (deduplicated).
+    Only matches square brackets [1], [1, 2], [1-3] or superscripts.
+    Does NOT match parentheses (1) to prevent treating measurements/counts like (4 mm) as citations.
     """
     seen = set()
     order = []
-    # Match patterns like [1], [1,2,3], [1-5], (1), etc.
-    bracket_pat = re.compile(r'[\[\(](\d+(?:[,;\s]+\d+|\s*[-–]\s*\d+)*)[\]\)]')
+    bracket_pat = re.compile(r'\[(\d+(?:[,;\s]+\d+|\s*[-–]\s*\d+)*)\]')
     for m in bracket_pat.finditer(body_text):
         inner = m.group(1)
-        # Expand ranges like 1-5 → 1,2,3,4,5
         parts = re.split(r'[,;\s]+', inner)
         for part in parts:
             range_m = re.match(r'(\d+)\s*[-–]\s*(\d+)', part)
@@ -150,6 +182,27 @@ def _extract_citation_order_from_body(body_text):
                 if n not in seen:
                     seen.add(n)
                     order.append(n)
+
+    if not order:
+        sup_pat = re.compile(r'([¹²³⁴⁵⁶⁷⁸⁹⁰]+(?:[,;\s]+[¹²³⁴⁵⁶⁷⁸⁹⁰]+|\s*[-–]\s*[¹²³⁴⁵⁶⁷⁸⁹⁰]+)*)')
+        for m in sup_pat.finditer(body_text):
+            raw = m.group(1)
+            asc = ''.join(SUPERSCRIPT_CHAR_MAP.get(c, c) for c in raw)
+            parts = re.split(r'[,;\s]+', asc)
+            for part in parts:
+                range_m = re.match(r'(\d+)\s*[-–]\s*(\d+)', part)
+                if range_m:
+                    lo, hi = int(range_m.group(1)), int(range_m.group(2))
+                    for n in range(lo, hi + 1):
+                        if n not in seen:
+                            seen.add(n)
+                            order.append(n)
+                elif part.strip().isdigit():
+                    n = int(part.strip())
+                    if n not in seen:
+                        seen.add(n)
+                        order.append(n)
+
     return order
 
 
@@ -299,64 +352,12 @@ def _find_section_headings(text):
 
 
 def _extract_authors_block(text):
-    """Heuristically extract author names from the beginning of the manuscript.
+    """Extract author names from the beginning of the manuscript.
 
     Returns list of author name strings in order.
-    Looks for comma-separated or newline-separated proper-noun sequences
-    before the Abstract / Introduction.
     """
-    # Find where the abstract/intro starts to bound the search
-    abstract_match = re.search(
-        r'\b(?:Abstract|ABSTRACT|Introduction|INTRODUCTION)\b', text
-    )
-    header_section = text[:abstract_match.start()] if abstract_match else text[:3000]
-
-    # Try to find author lines — proper noun sequences separated by commas or "and"
-    # Common patterns:
-    #   John Smith, Jane Doe, and Bob Lee
-    #   John Smith¹, Jane Doe², Bob Lee³
-    author_lines = []
-    for line in header_section.split('\n'):
-        line = line.strip()
-        if not line:
-            continue
-        # Skip title-like lines (all caps or very long)
-        if line.isupper() and len(line) > 10:
-            continue
-        # Skip affiliation lines
-        affil_kws = {'university', 'hospital', 'department', 'institute', 'faculty',
-                     'school', 'college', 'centre', 'center', 'clinic', 'research',
-                     'foundation', 'laboratory', 'medicine', 'science'}
-        if any(kw in line.lower() for kw in affil_kws):
-            continue
-        # Skip email lines
-        if '@' in line:
-            continue
-        # Check if line looks like author names (Title Case words separated by commas)
-        # Remove superscripts and special markers
-        cleaned = re.sub(r'[¹²³⁴⁵⁶⁷⁸⁹⁰*†‡§\d]', '', line).strip()
-        cleaned = re.sub(r'\s+', ' ', cleaned)
-        if not cleaned:
-            continue
-        words = cleaned.split()
-        title_words = sum(1 for w in words if w[0:1].isupper() and w.strip('.,;') not in {'and', 'And', 'AND'})
-        if title_words >= 2 and ',' in line:
-            author_lines.append(line)
-
-    # Parse individual author names from the collected lines
-    authors = []
-    for al in author_lines:
-        # Remove superscript markers
-        al = re.sub(r'[¹²³⁴⁵⁶⁷⁸⁹⁰*†‡§]', '', al)
-        # Split by comma, then by "and"
-        parts = re.split(r',\s*(?:and\s+)?|\s+and\s+', al)
-        for p in parts:
-            name = p.strip().strip('.,;')
-            name = re.sub(r'^\d+\s*', '', name)  # remove leading numbers
-            if name and len(name) > 2 and any(c.isalpha() for c in name):
-                authors.append(name)
-
-    return authors
+    authors = _parse_authors_with_markers(text)
+    return [a['name'] for a in authors]
 
 
 def _extract_affiliations_block(text):
@@ -364,61 +365,59 @@ def _extract_affiliations_block(text):
 
     Returns list of dicts with 'text' and 'marker' keys.
     """
-    abstract_match = re.search(
-        r'\b(?:Abstract|ABSTRACT|Introduction|INTRODUCTION)\b', text
-    )
-    header_section = text[:abstract_match.start()] if abstract_match else text[:5000]
-
-    affiliations = []
-    affil_kws = {'university', 'hospital', 'department', 'institute', 'faculty',
-                 'school', 'college', 'centre', 'center', 'clinic', 'research',
-                 'foundation', 'laboratory', 'medicine', 'science'}
-
-    for line in header_section.split('\n'):
-        line = line.strip()
-        if not line:
-            continue
-        if any(kw in line.lower() for kw in affil_kws):
-            # Extract superscript marker if present
-            marker_match = re.match(r'^[\s]*([¹²³⁴⁵⁶⁷⁸⁹⁰\d*†‡§]+)\s*', line)
-            marker = marker_match.group(1) if marker_match else ''
-            affil_text = line[marker_match.end():].strip() if marker_match else line
-            affiliations.append({'text': affil_text, 'marker': marker, 'raw': line})
-
-    return affiliations
+    affils = _parse_affiliations_with_markers(text)
+    return [{'text': a['text'], 'marker': a['marker'], 'raw': a['raw_line']} for a in affils]
 
 
 def _extract_title(text):
-    """Extract the article title from the manuscript.
+    """Extract the article title from the manuscript."""
+    if not text:
+        return ''
 
-    Assumes the title is the first non-blank line(s) before the author block.
-    """
+    # First, look for an explicit "Title:" or "Article Title:" prefix
+    m = re.search(r'(?im)^\s*(?:title|article\s+title|manuscript\s+title)\s*[:\-]\s*(.+)$', text)
+    if m:
+        title = m.group(1).strip()
+        lines = text[m.end():].split('\n')
+        for l in lines:
+            s = l.strip()
+            if not s or re.match(r'(?i)^(?:authors?|affiliations?|abstract|running)\b', s) or '@' in s:
+                break
+            if len(title.split()) > 40:
+                break
+            title += ' ' + s
+        return title.strip()
+
+    # Fallback: scan lines before authors/abstract
     lines = text.split('\n')
     title_lines = []
     for line in lines:
         stripped = line.strip()
         if not stripped:
             if title_lines:
-                break  # title ends at first blank after content
+                break
             continue
-        # Stop at author-like content (comma-separated names)
-        affil_kws = {'university', 'hospital', 'department', 'institute',
+        if re.match(r'(?i)^\s*title\s+page\b', stripped):
+            continue
+        if re.match(r'(?i)^\s*(?:authors?|affiliations?|abstract|introduction)\b', stripped):
+            break
+        affil_kws = {'university', 'hospital', 'department', 'institute', 'faculty',
                      'abstract', 'introduction', 'keywords'}
         if any(kw in stripped.lower() for kw in affil_kws):
             break
         if '@' in stripped:
             break
         title_lines.append(stripped)
-        # Title is usually 1-3 lines
         if len(title_lines) >= 4:
             break
 
-    return ' '.join(title_lines)
+    title = ' '.join(title_lines)
+    title = re.sub(r'^(?i:title|article[\s\-]title|authors?|affiliations?)\s*[:\-]?\s*', '', title).strip()
+    return title
 
 
 def _extract_corresponding_email(text):
     """Extract the corresponding author's email address."""
-    # Look for explicit corresponding author marker
     corr_patterns = [
         r'[Cc]orrespond(?:ing|ence)\s*(?:author)?\s*[:\-]?\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
         r'\*\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
@@ -428,11 +427,305 @@ def _extract_corresponding_email(text):
         m = re.search(pat, text)
         if m:
             return m.group(1)
-    # Fallback: first email found in the header area
     abstract_match = re.search(r'\b(?:Abstract|ABSTRACT)\b', text)
     header = text[:abstract_match.start()] if abstract_match else text[:3000]
     m = _EMAIL_PATTERN.search(header)
     return m.group() if m else None
+
+
+SUPERSCRIPT_CHAR_MAP = {
+    '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+    '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9'
+}
+DIGIT_TO_SUPERSCRIPT = {v: k for k, v in SUPERSCRIPT_CHAR_MAP.items()}
+
+def to_superscript_str(n):
+    """Convert int or digit string to unicode superscript characters."""
+    return ''.join(DIGIT_TO_SUPERSCRIPT.get(c, c) for c in str(n))
+
+
+_AFFIL_KEYWORDS = {
+    'university', 'hospital', 'department', 'institute', 'faculty',
+    'school', 'college', 'centre', 'center', 'clinic', 'research',
+    'foundation', 'laboratory', 'medicine', 'science', 'division', 'unit'
+}
+
+_DISALLOWED_NAME_WORDS = {
+    'contributed', 'author', 'authors', 'editor', 'writing', 'curation',
+    'analysis', 'investigation', 'supervision', 'validation', 'visualization',
+    'administration', 'resources', 'software', 'declaration', 'disclosure',
+    'funding', 'conflict', 'study', 'prospective', 'observational', 'firmness',
+    'cardiopulmonary', 'bypass', 'ultrafiltration', 'increases', 'viscoelastic',
+    'clot', 'title', 'technologies', 'proficiency', 'redundancy', 'responsibility'
+}
+
+
+def _parse_authors_with_markers(text):
+    """Parse author names along with their raw markers and numbers.
+
+    Returns a list of dicts:
+      {
+        'name': str,
+        'raw_token': str,
+        'marker': str,
+        'sup_nums': list[int],
+        'reg_nums': list[int],
+        'all_nums': list[int],
+        'is_sup': bool,
+        'is_corr': bool,
+        'start_offset': int,
+        'end_offset': int
+      }
+    """
+    if not text:
+        return []
+    section_m = re.search(r'(?im)^\s*(?:Abstract|Introduction|Background|Methods|Results|Discussion|References|Bibliography)\b', text)
+    header = text[:section_m.start()] if section_m else text[:4000]
+    lines = header.split('\n')
+
+    author_lines = []
+    curr_off = 0
+    seen_first_title_line = False
+
+    for idx, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        line_start = curr_off + (len(raw_line) - len(raw_line.lstrip()))
+        curr_off += len(raw_line) + 1
+
+        if not line:
+            continue
+
+        line_lower = line.lower()
+
+        # Stop conditions once author lines have been detected
+        if author_lines:
+            if re.match(r'^[¹²³⁴⁵⁶⁷⁸⁹⁰0-9]+[.\-:\s\t]+', line):
+                break
+            if any(line_lower.startswith(k) for k in ['department', 'division', 'institute', 'faculty', 'school', 'hospital', 'university']):
+                break
+            if line_lower.startswith('corresponding') or line_lower.startswith('*corresponding') or '@' in line:
+                break
+            if re.match(r'(?i)^\s*(?:funding|trial\s+registration|disclosure|declaration|author\s+contributions?|contributions?|running\s+title|abstract|introduction)\b', line):
+                break
+            if 'contributed equally' in line_lower:
+                break
+
+        # Skip headers / titles before author line
+        if re.match(r'(?i)^\s*(?:title\s+page|title\s*[:\-]|article\s+title\s*[:\-]|running\s+title\s*[:\-])', line):
+            seen_first_title_line = True
+            continue
+        if line_lower.startswith('corresponding') or line_lower.startswith('*corresponding') or '@' in line:
+            continue
+        if re.match(r'^[¹²³⁴⁵⁶⁷⁸⁹⁰0-9]+[.\-:\s\t]+', line):
+            continue
+        if any(line_lower.startswith(k) for k in ['department', 'division', 'institute', 'faculty', 'school', 'hospital', 'university']):
+            continue
+        if re.match(r'(?i)^\s*(?:funding|trial\s+registration|disclosure|declaration|author\s+contributions?|contributions?)\b', line):
+            continue
+        if 'contributed equally' in line_lower:
+            continue
+
+        is_explicit_author_line = bool(re.match(r'^(?i:authors?|author(?:[\s\-]name)?)\s*[:\-]', line))
+
+        # If we haven't seen a title yet and this isn't an explicit "Authors:" line, the first line is the title
+        if not seen_first_title_line and not is_explicit_author_line and not author_lines:
+            seen_first_title_line = True
+            continue
+
+        cleaned = re.sub(r'[¹²³⁴⁵⁶⁷⁸⁹⁰*†‡§\d]', '', line).strip()
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        if not cleaned:
+            continue
+
+        words = cleaned.split()
+        title_words = sum(1 for w in words if w[0:1].isupper() and w.strip('.,;') not in {'and', 'And', 'AND', '&'})
+        if title_words >= 1:
+            author_lines.append((raw_line, line_start))
+
+    if not author_lines:
+        return []
+
+    authors = []
+    for raw_line, l_start in author_lines:
+        line_str = re.sub(r'^(?i:authors?|author(?:[\s\-]name)?)\s*[:\-]?\s*', '', raw_line).strip()
+        prefix_len = len(raw_line) - len(line_str)
+        l_start += prefix_len
+
+        parts = re.split(r',\s*(?=[A-Z]|and\s+|&\s+)|\s+and\s+|\s+&\s+', line_str)
+        search_pos = 0
+        for p in parts:
+            p_strip = p.strip().strip('.,;')
+            if not p_strip or len(p_strip) < 2:
+                continue
+
+            if ':' in p_strip or ';' in p_strip:
+                continue
+
+            p_idx = line_str.find(p, search_pos)
+            if p_idx >= 0:
+                tok_start = l_start + p_idx
+                search_pos = p_idx + len(p)
+            else:
+                tok_start = l_start
+
+            tok_end = tok_start + len(p)
+
+            m = re.match(r'^(.*?)([\s]*[¹²³⁴⁵⁶⁷⁸⁹⁰0-9*†‡§, \-]+)$', p_strip)
+            if m:
+                name = m.group(1).strip()
+                marker = m.group(2).strip()
+            else:
+                name = p_strip
+                marker = ''
+
+            name_words = {w.lower().strip('.,;:()') for w in name.split()}
+            if any(w in _DISALLOWED_NAME_WORDS for w in name_words):
+                continue
+
+            clusters = re.findall(r'[¹²³⁴⁵⁶⁷⁸⁹⁰]+|[0-9]+', marker)
+            sup_nums = []
+            reg_nums = []
+            for c in clusters:
+                if all(ch in '0123456789' for ch in c):
+                    reg_nums.append(int(c))
+                else:
+                    n_str = ''.join(SUPERSCRIPT_CHAR_MAP.get(ch, '') for ch in c)
+                    if n_str:
+                        sup_nums.append(int(n_str))
+
+            all_nums = sup_nums + reg_nums
+            is_sup = len(sup_nums) > 0 and len(reg_nums) == 0
+            is_corr = '*' in marker
+
+            authors.append({
+                'name': name,
+                'raw_token': p_strip,
+                'marker': marker,
+                'sup_nums': sup_nums,
+                'reg_nums': reg_nums,
+                'all_nums': all_nums,
+                'is_sup': is_sup,
+                'is_corr': is_corr,
+                'start_offset': tok_start,
+                'end_offset': tok_end,
+            })
+
+    return authors
+
+
+def _parse_affiliations_with_markers(text):
+    """Parse affiliation lines and identify leading numbers and superscript status.
+
+    Returns a list of dicts:
+      {
+        'num': int or None,
+        'is_sup': bool,
+        'text': str,
+        'marker': str,
+        'raw_line': str,
+        'start_offset': int,
+        'end_offset': int
+      }
+    """
+    if not text:
+        return []
+    section_m = re.search(r'(?im)^\s*(?:Abstract|Introduction|Background|Methods|Results|Discussion|References|Bibliography)\b', text)
+    header = text[:section_m.start()] if section_m else text[:4000]
+    lines = header.split('\n')
+    affils = []
+    curr_off = 0
+
+    _NON_AFFIL_HEADINGS = re.compile(
+        r'(?i)^\s*(?:funding|trial\s+registration|disclosure|declaration|author\s+contributions?|contributions?|running\s+title|title|corresponding|abstract|introduction|conflict|competing)\b'
+    )
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        line_start = curr_off + (len(raw_line) - len(raw_line.lstrip()))
+        line_end = curr_off + len(raw_line)
+        curr_off += len(raw_line) + 1
+
+        if not line:
+            continue
+
+        if _NON_AFFIL_HEADINGS.match(line):
+            if affils:
+                break
+            continue
+
+        line_lower = line.lower()
+        if line_lower.startswith('corresponding') or line_lower.startswith('*corresponding') or '@' in line:
+            if affils:
+                break
+            continue
+
+        if 'contributed equally' in line_lower:
+            continue
+
+        has_num_prefix = bool(re.match(r'^[¹²³⁴⁵⁶⁷⁸⁹⁰0-9]+[.\-:\s\t]+', line))
+        has_inst_prefix = any(line_lower.startswith(k) for k in [
+            'department', 'division', 'institute', 'faculty', 'school',
+            'college', 'hospital', 'center', 'centre', 'clinic', 'university', 'laboratory'
+        ])
+
+        if not (has_num_prefix or has_inst_prefix):
+            continue
+
+        clean_line = re.sub(r'^(?i:affiliations?)\s*[:\-]?\s*', '', line).strip()
+        m = re.match(r'^[\s\[\(]*([¹²³⁴⁵⁶⁷⁸⁹⁰]+|[0-9]+)[\s\]\)\.\-:]*(.*)$', clean_line)
+        if m:
+            raw_num = m.group(1)
+            affil_text = m.group(2).strip()
+            if all(ch in '0123456789' for ch in raw_num):
+                num = int(raw_num)
+                is_sup = False
+            else:
+                n_str = ''.join(SUPERSCRIPT_CHAR_MAP.get(ch, '') for ch in raw_num)
+                num = int(n_str) if n_str else None
+                is_sup = True
+            marker = raw_num
+        else:
+            num = None
+            is_sup = False
+            affil_text = clean_line
+            marker = ''
+
+        affils.append({
+            'num': num,
+            'is_sup': is_sup,
+            'text': affil_text,
+            'marker': marker,
+            'raw_line': raw_line,
+            'start_offset': line_start,
+            'end_offset': line_end,
+        })
+    return affils
+
+
+def _extract_corresponding_author_name(text):
+    """Extract the corresponding author's personal name from the manuscript."""
+    if not text:
+        return None
+    corr_patterns = [
+        r'(?im)^\s*\*?\s*correspond(?:ing|ence)\s*(?:author)?\s*[:\-]?\s*\n*\s*([A-Z][a-zA-Z\s\.\-]+?)(?=[,\n\(]|\s+at\b|[a-zA-Z0-9._%+\-]+@|$)',
+        r'(?i)\*?\s*correspondence\s+to\s*[:\-]?\s*\n*\s*([A-Z][a-zA-Z\s\.\-]+?)(?=[,\n\(]|\s+at\b|[a-zA-Z0-9._%+\-]+@|$)',
+        r'(?i)address\s+correspondence\s+to\s*[:\-]?\s*\n*\s*([A-Z][a-zA-Z\s\.\-]+?)(?=[,\n\(]|\s+at\b|[a-zA-Z0-9._%+\-]+@|$)',
+    ]
+    for pat in corr_patterns:
+        m = re.search(pat, text)
+        if m:
+            val = m.group(1).strip()
+            val = re.sub(r'^(?i:dr\.?|prof\.?)\s*', '', val).strip()
+            if val and len(val) > 2 and any(c.isalpha() for c in val):
+                return val
+
+    # Fallback to author marked with asterisk (*)
+    authors = _parse_authors_with_markers(text)
+    for a in authors:
+        if a.get('is_corr'):
+            return a['name']
+
+    return None
 
 
 # ─────────────────────────────────────────────
@@ -544,13 +837,10 @@ def check_author_names(original_text, edited_text):
 # ─────────────────────────────────────────────
 
 RULE_ID_AFFILIATION = 'AFFILIATION_CHANGED'
+RULE_ID_AFFILIATION_SUPERSCRIPT = 'AFFILIATION_SUPERSCRIPT_INVALID'
 
-def check_affiliations(original_text, edited_text):
-    """Compare affiliations between original and edited manuscript.
-
-    Detects: changed institution, department, city, country, superscript mapping,
-             or missing affiliation.
-    """
+def _check_affiliation_text_diffs(original_text, edited_text):
+    """Compare affiliation text content between original and edited manuscript."""
     errors = []
     if not original_text or not edited_text:
         return errors
@@ -564,7 +854,6 @@ def check_affiliations(original_text, edited_text):
     def normalize(t):
         return re.sub(r'\s+', ' ', t.strip().lower())
 
-    # Match by marker first, then by position
     matched_orig = set()
     matched_edit = set()
 
@@ -572,60 +861,49 @@ def check_affiliations(original_text, edited_text):
         for ei, ea in enumerate(edit_affils):
             if ei in matched_edit:
                 continue
-            # Match by marker
             if oa['marker'] and ea['marker'] and oa['marker'] == ea['marker']:
                 if normalize(oa['text']) != normalize(ea['text']):
-                    ratio = difflib.SequenceMatcher(
-                        None, normalize(oa['text']), normalize(ea['text'])
-                    ).ratio()
-                    if ratio < 0.95:
-                        offset = edited_text.find(ea['raw'])
-                        errors.append(_make_critical_error(
-                            error_code=RULE_ID_AFFILIATION,
-                            original_value=oa['text'],
-                            current_value=ea['text'],
-                            page_or_line=1,
-                            column_or_field='Affiliation',
-                            rule_id=RULE_ID_AFFILIATION,
-                            suggested_action=f'Restore original affiliation for marker {oa["marker"]}',
-                            description=f'Affiliation changed (marker {oa["marker"]}): "{oa["text"]}" → "{ea["text"]}"',
-                            start_offset=offset if offset >= 0 else 0,
-                            end_offset=(offset + len(ea['raw'])) if offset >= 0 else 0,
-                            full_text=edited_text,
-                        ))
-                matched_orig.add(oi)
-                matched_edit.add(ei)
-                break
-
-    # Positional matching for unmatched
-    for oi, oa in enumerate(orig_affils):
-        if oi in matched_orig:
-            continue
-        if oi < len(edit_affils) and oi not in matched_edit:
-            ea = edit_affils[oi]
-            if normalize(oa['text']) != normalize(ea['text']):
-                ratio = difflib.SequenceMatcher(
-                    None, normalize(oa['text']), normalize(ea['text'])
-                ).ratio()
-                if ratio < 0.95:
                     offset = edited_text.find(ea['raw'])
                     errors.append(_make_critical_error(
                         error_code=RULE_ID_AFFILIATION,
                         original_value=oa['text'],
                         current_value=ea['text'],
                         page_or_line=1,
-                        column_or_field='Affiliation',
+                        column_or_field='Affiliation(s)',
                         rule_id=RULE_ID_AFFILIATION,
-                        suggested_action='Restore original affiliation',
-                        description=f'Affiliation changed: "{oa["text"]}" → "{ea["text"]}"',
+                        suggested_action=f'Restore original affiliation for marker {oa["marker"]}',
+                        description=f'Affiliation changed (marker {oa["marker"]}): "{oa["text"]}" → "{ea["text"]}"',
                         start_offset=offset if offset >= 0 else 0,
                         end_offset=(offset + len(ea['raw'])) if offset >= 0 else 0,
                         full_text=edited_text,
                     ))
+                matched_orig.add(oi)
+                matched_edit.add(ei)
+                break
+
+    for oi, oa in enumerate(orig_affils):
+        if oi in matched_orig:
+            continue
+        if oi < len(edit_affils) and oi not in matched_edit:
+            ea = edit_affils[oi]
+            if normalize(oa['text']) != normalize(ea['text']):
+                offset = edited_text.find(ea['raw'])
+                errors.append(_make_critical_error(
+                    error_code=RULE_ID_AFFILIATION,
+                    original_value=oa['text'],
+                    current_value=ea['text'],
+                    page_or_line=1,
+                    column_or_field='Affiliation(s)',
+                    rule_id=RULE_ID_AFFILIATION,
+                    suggested_action='Restore original affiliation',
+                    description=f'Affiliation changed: "{oa["text"]}" → "{ea["text"]}"',
+                    start_offset=offset if offset >= 0 else 0,
+                    end_offset=(offset + len(ea['raw'])) if offset >= 0 else 0,
+                    full_text=edited_text,
+                ))
             matched_orig.add(oi)
             matched_edit.add(oi)
 
-    # Missing affiliations
     for oi, oa in enumerate(orig_affils):
         if oi not in matched_orig:
             errors.append(_make_critical_error(
@@ -633,13 +911,230 @@ def check_affiliations(original_text, edited_text):
                 original_value=oa['text'],
                 current_value='[MISSING]',
                 page_or_line=1,
-                column_or_field='Affiliation',
+                column_or_field='Affiliation(s)',
                 rule_id=RULE_ID_AFFILIATION,
                 suggested_action=f'Restore missing affiliation: "{oa["text"]}"',
                 description=f'Affiliation removed from manuscript: "{oa["text"]}"',
                 full_text=edited_text,
             ))
 
+    return errors
+
+
+def check_affiliation_superscripts(original_text, edited_text):
+    """Validate affiliation superscripts and author-to-affiliation mapping.
+
+    Rules:
+      - Each author must have one or more affiliation numbers as superscripts.
+      - Each affiliation block must begin with a matching superscript number.
+      - Validate the author-to-affiliation mapping.
+
+    Raises Critical error when:
+      - an author has no affiliation superscript number;
+      - an affiliation number is not superscript;
+      - an author number has no matching affiliation;
+      - an affiliation number has no matching author;
+      - duplicate or invalid affiliation numbers exist;
+      - the author-to-affiliation mapping changed from the approved original.
+
+    Error code: AFFILIATION_SUPERSCRIPT_INVALID
+    Severity: Critical
+    Suggested action: Restore the correct superscript affiliation number and mapping.
+    """
+    errors = []
+    if not edited_text:
+        return errors
+
+    edit_authors = _parse_authors_with_markers(edited_text)
+    edit_affils = _parse_affiliations_with_markers(edited_text)
+
+    if not edit_authors and not edit_affils:
+        return errors
+
+    SUGGESTED_ACTION = "Restore the correct superscript affiliation number and mapping."
+
+    # 1. An author has no affiliation superscript number
+    for author in edit_authors:
+        if not author['all_nums']:
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                original_value=f"{author['name']} [superscript affiliation required]",
+                current_value=author['name'],
+                page_or_line=1,
+                column_or_field='Affiliation(s)',
+                rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                suggested_action=SUGGESTED_ACTION,
+                description=f'Author "{author["name"]}" has no affiliation superscript number.',
+                start_offset=author['start_offset'],
+                end_offset=author['end_offset'],
+                full_text=edited_text,
+            ))
+
+    # 2. An affiliation number is not superscript
+    # Check authors
+    for author in edit_authors:
+        if author['reg_nums']:
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                original_value=f"{author['name']}{to_superscript_str(author['reg_nums'][0])}",
+                current_value=author['raw_token'],
+                page_or_line=1,
+                column_or_field='Affiliation(s)',
+                rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                suggested_action=SUGGESTED_ACTION,
+                description=f'Affiliation number for author "{author["name"]}" is not superscript (found regular number "{author["marker"]}").',
+                start_offset=author['start_offset'],
+                end_offset=author['end_offset'],
+                full_text=edited_text,
+            ))
+
+    # Check affiliation blocks
+    for affil in edit_affils:
+        if not affil['is_sup']:
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                original_value=f"{to_superscript_str(affil['num'] or 1)} {affil['text']}",
+                current_value=affil['raw_line'],
+                page_or_line=1,
+                column_or_field='Affiliation(s)',
+                rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                suggested_action=SUGGESTED_ACTION,
+                description=f'Affiliation block begins with non-superscript number: "{affil["marker"] or affil["raw_line"][:10]}". Each affiliation block must begin with a matching superscript number.',
+                start_offset=affil['start_offset'],
+                end_offset=affil['end_offset'],
+                full_text=edited_text,
+            ))
+
+    # 3. An author number has no matching affiliation
+    available_affil_nums = {a['num'] for a in edit_affils if a['num'] is not None}
+    for author in edit_authors:
+        for n in author['all_nums']:
+            if n not in available_affil_nums:
+                errors.append(_make_critical_error(
+                    error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                    original_value=f"Affiliation block {to_superscript_str(n)}",
+                    current_value=f"Author {author['name']} references {to_superscript_str(n)}",
+                    page_or_line=1,
+                    column_or_field='Affiliation(s)',
+                    rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                    suggested_action=SUGGESTED_ACTION,
+                    description=f'Author "{author["name"]}" references affiliation number {n}, but no matching affiliation block with superscript {to_superscript_str(n)} exists.',
+                    start_offset=author['start_offset'],
+                    end_offset=author['end_offset'],
+                    full_text=edited_text,
+                ))
+
+    # 4. An affiliation number has no matching author
+    author_referenced_nums = set()
+    for author in edit_authors:
+        author_referenced_nums.update(author['all_nums'])
+
+    for affil in edit_affils:
+        if affil['num'] is not None and affil['num'] not in author_referenced_nums:
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                original_value=f"Matching author for affiliation {to_superscript_str(affil['num'])}",
+                current_value=affil['raw_line'],
+                page_or_line=1,
+                column_or_field='Affiliation(s)',
+                rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                suggested_action=SUGGESTED_ACTION,
+                description=f'Affiliation block begins with superscript {to_superscript_str(affil["num"])}, but has no matching author referencing it.',
+                start_offset=affil['start_offset'],
+                end_offset=affil['end_offset'],
+                full_text=edited_text,
+            ))
+
+    # 5. Duplicate or invalid affiliation numbers exist
+    from collections import Counter
+    block_num_counts = Counter(a['num'] for a in edit_affils if a['num'] is not None)
+    for num, count in block_num_counts.items():
+        if count > 1:
+            dup_blocks = [a for a in edit_affils if a['num'] == num]
+            first_dup = dup_blocks[1]
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                original_value=f"Unique affiliation block number {to_superscript_str(num)}",
+                current_value=f"Duplicate affiliation block {to_superscript_str(num)} ({count} occurrences)",
+                page_or_line=1,
+                column_or_field='Affiliation(s)',
+                rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                suggested_action=SUGGESTED_ACTION,
+                description=f'Duplicate affiliation block number detected: multiple blocks begin with superscript {to_superscript_str(num)}.',
+                start_offset=first_dup['start_offset'],
+                end_offset=first_dup['end_offset'],
+                full_text=edited_text,
+            ))
+
+    for author in edit_authors:
+        if len(author['sup_nums']) != len(set(author['sup_nums'])):
+            dup_nums = [n for n, c in Counter(author['sup_nums']).items() if c > 1]
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                original_value=f"Unique affiliation numbers for {author['name']}",
+                current_value=author['raw_token'],
+                page_or_line=1,
+                column_or_field='Affiliation(s)',
+                rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                suggested_action=SUGGESTED_ACTION,
+                description=f'Duplicate affiliation number on author "{author["name"]}": superscript {to_superscript_str(dup_nums[0])} appears more than once.',
+                start_offset=author['start_offset'],
+                end_offset=author['end_offset'],
+                full_text=edited_text,
+            ))
+
+    # 6. Author-to-affiliation mapping changed from the approved original
+    if original_text:
+        orig_authors = _parse_authors_with_markers(original_text)
+        orig_affils = _parse_affiliations_with_markers(original_text)
+
+        orig_affil_map = {a['num']: a['text'].strip().lower() for a in orig_affils if a['num'] is not None}
+        edit_affil_map = {a['num']: a['text'].strip().lower() for a in edit_affils if a['num'] is not None}
+
+        orig_author_map = {}
+        for a in orig_authors:
+            norm_name = re.sub(r'\s+', ' ', a['name'].strip().lower())
+            nums = tuple(sorted(set(a['all_nums'])))
+            texts = tuple(sorted(set(orig_affil_map.get(n, '') for n in nums if n in orig_affil_map)))
+            orig_author_map[norm_name] = (nums, texts)
+
+        for a in edit_authors:
+            norm_name = re.sub(r'\s+', ' ', a['name'].strip().lower())
+            if norm_name in orig_author_map:
+                orig_nums, orig_texts = orig_author_map[norm_name]
+                edit_nums = tuple(sorted(set(a['all_nums'])))
+                edit_texts = tuple(sorted(set(edit_affil_map.get(n, '') for n in edit_nums if n in edit_affil_map)))
+
+                if orig_nums and edit_nums and (orig_nums != edit_nums or (orig_texts and edit_texts and orig_texts != edit_texts)):
+                    orig_disp = ', '.join(to_superscript_str(n) for n in orig_nums)
+                    edit_disp = ', '.join(to_superscript_str(n) for n in edit_nums)
+                    errors.append(_make_critical_error(
+                        error_code=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                        original_value=f"{a['name']}{''.join(to_superscript_str(n) for n in orig_nums)}",
+                        current_value=a['raw_token'],
+                        page_or_line=1,
+                        column_or_field='Affiliation(s)',
+                        rule_id=RULE_ID_AFFILIATION_SUPERSCRIPT,
+                        suggested_action=SUGGESTED_ACTION,
+                        description=f'Author-to-affiliation mapping changed from the approved original for author "{a["name"]}" (original was {orig_disp}, current is {edit_disp}).',
+                        start_offset=a['start_offset'],
+                        end_offset=a['end_offset'],
+                        full_text=edited_text,
+                    ))
+
+    return errors
+
+
+def check_affiliations(original_text, edited_text):
+    """Run Affiliation(s) rule group checks:
+      1. Content comparison against approved original (AFFILIATION_CHANGED)
+      2. Strict affiliation superscript and mapping validation (AFFILIATION_SUPERSCRIPT_INVALID)
+    """
+    errors = []
+    # 1. Text difference comparison
+    errors.extend(_check_affiliation_text_diffs(original_text, edited_text))
+    # 2. Superscript and mapping validation
+    errors.extend(check_affiliation_superscripts(original_text, edited_text))
     return errors
 
 
@@ -721,16 +1216,153 @@ def check_email(original_text, edited_text):
     return errors
 
 
+RULE_ID_CORRESPONDING_NAME_CHANGED = 'CORRESPONDING_AUTHOR_NAME_CHANGED'
+RULE_ID_CORRESPONDING_NAME_MISSING = 'CORRESPONDING_AUTHOR_NAME_MISSING'
+RULE_ID_CORRESPONDING_NAME_MISMATCH = 'CORRESPONDING_AUTHOR_NAME_MISMATCH'
+
+def check_corresponding_author_name(original_text, edited_text):
+    """Validate Corresponding Author Name.
+
+    Checks:
+      1. Corresponding author exists in edited manuscript
+      2. Corresponding author matches approved original
+      3. Corresponding author marker (*) matches correspondence section name
+      4. Corresponding author email format and match with original
+
+    All issues produced have Severity = Critical.
+    """
+    errors = []
+    if not edited_text:
+        return errors
+
+    edit_corr_name = _extract_corresponding_author_name(edited_text)
+    orig_corr_name = _extract_corresponding_author_name(original_text) if original_text else None
+
+    # Check authors in edited
+    edit_authors = _parse_authors_with_markers(edited_text)
+    asterisk_authors = [a['name'] for a in edit_authors if a.get('is_corr')]
+
+    # 1. Missing corresponding author
+    if not edit_corr_name and not asterisk_authors:
+        errors.append(_make_critical_error(
+            error_code=RULE_ID_CORRESPONDING_NAME_MISSING,
+            original_value=orig_corr_name or '[Designated Corresponding Author]',
+            current_value='[MISSING]',
+            page_or_line=1,
+            column_or_field='Corresponding Author Name',
+            rule_id=RULE_ID_CORRESPONDING_NAME_MISSING,
+            suggested_action='Designate the corresponding author name with an asterisk and correspondence section.',
+            description='Corresponding author designation or name is missing from the manuscript.',
+            full_text=edited_text,
+        ))
+        return errors
+
+    # 2. Compare against original
+    active_edit_name = edit_corr_name or (asterisk_authors[0] if asterisk_authors else None)
+    if orig_corr_name and active_edit_name:
+        def norm(n):
+            return re.sub(r'\s+', ' ', n.strip().lower())
+        if norm(orig_corr_name) != norm(active_edit_name):
+            ratio = difflib.SequenceMatcher(None, norm(orig_corr_name), norm(active_edit_name)).ratio()
+            desc = (f'Corresponding author name spelling changed: "{orig_corr_name}" → "{active_edit_name}"'
+                    if ratio >= 0.7 else
+                    f'Corresponding author name changed: expected "{orig_corr_name}", found "{active_edit_name}"')
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_CORRESPONDING_NAME_CHANGED,
+                original_value=orig_corr_name,
+                current_value=active_edit_name,
+                page_or_line=1,
+                column_or_field='Corresponding Author Name',
+                rule_id=RULE_ID_CORRESPONDING_NAME_CHANGED,
+                suggested_action=f'Restore original corresponding author name: "{orig_corr_name}"',
+                description=desc,
+                full_text=edited_text,
+            ))
+
+    # 3. Mismatch between asterisk author and named note
+    if edit_corr_name and asterisk_authors:
+        def norm(n):
+            return re.sub(r'\s+', ' ', n.strip().lower())
+        if not any(norm(edit_corr_name) == norm(a) for a in asterisk_authors):
+            errors.append(_make_critical_error(
+                error_code=RULE_ID_CORRESPONDING_NAME_MISMATCH,
+                original_value=edit_corr_name,
+                current_value=', '.join(asterisk_authors),
+                page_or_line=1,
+                column_or_field='Corresponding Author Name',
+                rule_id=RULE_ID_CORRESPONDING_NAME_MISMATCH,
+                suggested_action='Ensure the corresponding author asterisk matches the named corresponding author.',
+                description=f'Corresponding author asterisk is on "{", ".join(asterisk_authors)}" but correspondence section names "{edit_corr_name}".',
+                full_text=edited_text,
+            ))
+
+    # 4. Email check
+    email_errs = check_email(original_text, edited_text)
+    for ee in email_errs:
+        ee['field'] = 'Corresponding Author Name'
+        ee['severity'] = 'CRITICAL'
+        ee['category'] = 'CRITICAL'
+        errors.append(ee)
+
+    return errors
+
+
 # ─────────────────────────────────────────────
 # RULE 4: ARTICLE TITLE
 # ─────────────────────────────────────────────
 
 RULE_ID_TITLE = 'ARTICLE_TITLE_CHANGED'
 
-def check_article_title(original_text, edited_text):
-    """Compare article title between original and edited manuscript.
+RULE_ID_TITLE_CASE = 'ARTICLE_TITLE_CASE_INVALID'
 
-    Detects: changed, missing, shortened, added, or reordered title text.
+def _format_initial_word(t):
+    """InitialWord (Sentence case): First word capitalized, rest lowercase except acronyms."""
+    words = re.split(r'(\s+)', t)
+    res = []
+    is_start = True
+    for w in words:
+        if not w.strip():
+            res.append(w)
+            continue
+        clean = re.sub(r'^[^\w]+|[^\w]+$', '', w)
+        if clean.isupper() and len(clean) > 1:
+            res.append(w)
+        elif is_start:
+            res.append(w[0].upper() + w[1:].lower() if len(w) > 0 else w)
+            is_start = False
+        else:
+            res.append(w.lower())
+        if w.rstrip().endswith(':'):
+            is_start = True
+    return ''.join(res)
+
+def _format_initial_letter(t):
+    """InitialLetter (Title case): Each significant word's initial letter capitalized."""
+    minor = {'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'in', 'of', 'with'}
+    words = re.split(r'(\s+)', t)
+    res = []
+    is_start = True
+    for w in words:
+        if not w.strip():
+            res.append(w)
+            continue
+        clean = re.sub(r'^[^\w]+|[^\w]+$', '', w)
+        if clean.isupper() and len(clean) > 1:
+            res.append(w)
+        elif is_start or clean.lower() not in minor:
+            res.append(w[0].upper() + w[1:] if len(w) > 0 else w)
+            is_start = False
+        else:
+            res.append(w.lower())
+        if w.rstrip().endswith(':'):
+            is_start = True
+    return ''.join(res)
+
+def check_article_title(original_text, edited_text, job_sheet_instructions=None):
+    """Compare article title between original and edited manuscript and validate Job Sheet casing.
+
+    Detects: changed, missing, shortened, added, or reordered title text,
+    as well as InitialWord / InitialLetter casing violations from the Job Sheet.
     """
     errors = []
     if not original_text or not edited_text:
@@ -750,43 +1382,111 @@ def check_article_title(original_text, edited_text):
             page_or_line=1,
             column_or_field='Article Title',
             rule_id=RULE_ID_TITLE,
-            suggested_action=f'Restore original article title',
-            description=f'Article title is missing from the edited manuscript.',
+            suggested_action=f'Restore original article title: "{orig_title}"',
+            description=f'Article title is missing from the edited manuscript: "{orig_title}"',
             full_text=edited_text,
         ))
         return errors
 
-    def normalize(t):
-        return re.sub(r'\s+', ' ', t.strip().lower())
+    if not orig_title and edit_title:
+        offset = edited_text.find(edit_title)
+        errors.append(_make_critical_error(
+            error_code=RULE_ID_TITLE,
+            original_value='[NOT IN ORIGINAL]',
+            current_value=edit_title,
+            page_or_line=1,
+            column_or_field='Article Title',
+            rule_id=RULE_ID_TITLE,
+            suggested_action='Verify article title against approved source',
+            description=f'Article title added in edited manuscript: "{edit_title}"',
+            start_offset=offset if offset >= 0 else 0,
+            end_offset=(offset + len(edit_title)) if offset >= 0 else 0,
+            full_text=edited_text,
+        ))
+        return errors
 
-    if normalize(orig_title) != normalize(edit_title):
-        ratio = difflib.SequenceMatcher(
-            None, normalize(orig_title), normalize(edit_title)
-        ).ratio()
+    def normalize_ws(t):
+        return re.sub(r'\s+', ' ', t.strip()) if t else ''
 
-        if ratio < 0.95:
-            # Determine the nature of the change
-            if len(edit_title) < len(orig_title) * 0.5:
-                change_type = 'shortened'
-            elif len(edit_title) > len(orig_title) * 1.5:
-                change_type = 'expanded/added text'
+    if normalize_ws(orig_title) != normalize_ws(edit_title):
+        # Determine the nature of the change
+        if len(edit_title) < len(orig_title) * 0.5:
+            change_type = 'shortened'
+        elif len(edit_title) > len(orig_title) * 1.5:
+            change_type = 'expanded/added text'
+        elif orig_title.lower() == edit_title.lower():
+            change_type = 'capitalization/casing changed'
+        else:
+            change_type = 'changed'
+
+        offset = edited_text.find(edit_title)
+        end_offset = (offset + len(edit_title)) if offset >= 0 else 0
+        if offset < 0:
+            pattern = re.escape(edit_title)
+            pattern = re.sub(r'\\ ', r'\\s+', pattern)
+            m = re.search(pattern, edited_text)
+            if m:
+                offset = m.start()
+                end_offset = m.end()
             else:
-                change_type = 'changed'
+                first_chunk = edit_title[:30].strip()
+                offset = edited_text.find(first_chunk) if first_chunk else 0
+                end_offset = (offset + len(edit_title)) if offset >= 0 else 0
 
-            offset = edited_text.find(edit_title)
-            errors.append(_make_critical_error(
-                error_code=RULE_ID_TITLE,
-                original_value=orig_title,
-                current_value=edit_title,
-                page_or_line=1,
-                column_or_field='Article Title',
-                rule_id=RULE_ID_TITLE,
-                suggested_action=f'Restore original article title',
-                description=f'Article title {change_type}: "{orig_title}" → "{edit_title}"',
-                start_offset=offset if offset >= 0 else 0,
-                end_offset=(offset + len(edit_title)) if offset >= 0 else 0,
-                full_text=edited_text,
-            ))
+        errors.append(_make_critical_error(
+            error_code=RULE_ID_TITLE,
+            original_value=orig_title,
+            current_value=edit_title,
+            page_or_line=1,
+            column_or_field='Article Title',
+            rule_id=RULE_ID_TITLE,
+            suggested_action=f'Restore original article title: "{orig_title}"',
+            description=f'Article title {change_type}: "{orig_title}" → "{edit_title}"',
+            start_offset=offset if offset >= 0 else 0,
+            end_offset=end_offset,
+            full_text=edited_text,
+        ))
+
+    # 2. Check Job Sheet Title Casing (InitialWord or InitialLetter)
+    if edit_title and job_sheet_instructions:
+        case_rule = None
+        for instr in job_sheet_instructions:
+            sec = (getattr(instr, 'section', None) or (instr.get('section') if isinstance(instr, dict) else '') or '').lower()
+            val = (getattr(instr, 'instruction', None) or (instr.get('instruction') if isinstance(instr, dict) else '') or '')
+            sec_clean = sec.replace(' ', '')
+            val_clean = val.lower().replace(' ', '')
+            if ('title' in sec_clean and ('upper' in sec_clean or 'case' in sec_clean)) or 'titleupper' in sec_clean:
+                if 'initialword' in val_clean:
+                    case_rule = 'InitialWord'
+                    break
+                elif 'initialletter' in val_clean:
+                    case_rule = 'InitialLetter'
+                    break
+            elif 'titleupper' in val_clean or 'initialword' in val_clean:
+                case_rule = 'InitialWord'
+                break
+            elif 'initialletter' in val_clean:
+                case_rule = 'InitialLetter'
+                break
+
+        if case_rule:
+            expected_cased = _format_initial_word(edit_title) if case_rule == 'InitialWord' else _format_initial_letter(edit_title)
+            if edit_title != expected_cased:
+                offset = edited_text.find(edit_title)
+                end_offset = (offset + len(edit_title)) if offset >= 0 else 0
+                errors.append(_make_critical_error(
+                    error_code=RULE_ID_TITLE_CASE,
+                    original_value=expected_cased,
+                    current_value=edit_title,
+                    page_or_line=1,
+                    column_or_field='Article Title',
+                    rule_id=RULE_ID_TITLE_CASE,
+                    suggested_action=f'Apply Job Sheet TitleUpperCase ({case_rule}): "{expected_cased}"',
+                    description=f'Article title does not match Job Sheet {case_rule} casing: expected "{expected_cased}", found "{edit_title}"',
+                    start_offset=offset if offset >= 0 else 0,
+                    end_offset=end_offset,
+                    full_text=edited_text,
+                ))
 
     return errors
 
@@ -911,8 +1611,11 @@ def check_numbered_references(edited_text):
     body_text = _extract_body_text(edited_text)
     citation_order = _extract_citation_order_from_body(body_text)
     if citation_order and entries:
-        # Build a map: reference number → position in reference list
-        ref_list_order = {e['number']: idx for idx, e in enumerate(entries)}
+        # Build a map: reference number → position in reference list (first occurrence)
+        ref_list_order = {}
+        for idx, e in enumerate(entries):
+            if e['number'] not in ref_list_order:
+                ref_list_order[e['number']] = idx
         # Walk citations in their body-text order and check that the
         # corresponding reference list entry appears in the same sequence
         expected_list_position = 0
@@ -1113,40 +1816,54 @@ def check_unnumbered_references(edited_text):
     return errors
 
 
+def check_references(edited_text, job_sheet_instructions=None):
+    """Validate References rule group.
+
+    Supports numbered citation order, author-year alphabetical order,
+    and unnumbered references checks. All issues produced have Severity = Critical.
+    """
+    errors = []
+    if not edited_text:
+        return errors
+
+    style = _detect_citation_style_from_job_sheet(job_sheet_instructions)
+
+    if style == 'author_year':
+        errors.extend(check_author_year_reference_order(edited_text))
+    elif style == 'unnumbered':
+        errors.extend(check_unnumbered_references(edited_text))
+    elif style == 'numbered':
+        errors.extend(check_numbered_references(edited_text))
+    else:
+        # Auto-detect style from manuscript content
+        ref_start, ref_section = _find_reference_section(edited_text)
+        if ref_section:
+            has_numbers = bool(re.search(r'^[ \t]*\[?(\d+)\]?[.\):]?\s+', ref_section, re.MULTILINE))
+            if has_numbers:
+                errors.extend(check_numbered_references(edited_text))
+            else:
+                errors.extend(check_author_year_reference_order(edited_text))
+
+    for e in errors:
+        e['field'] = 'References'
+        e['severity'] = 'CRITICAL'
+        e['category'] = 'CRITICAL'
+
+    return errors
+
+
 # ─────────────────────────────────────────────
-# CRITICAL RULES REGISTRY
+# CRITICAL RULES REGISTRY — THE FIVE RULE GROUPS
 # ─────────────────────────────────────────────
 
-# Maps job-sheet section/instruction keywords to rule functions
+# Strictly configured for the allowed five rule groups:
+# 1. Article Title
+# 2. Author Name(s)
+# 3. Affiliation(s)
+# 4. Corresponding Author Name
+# 5. References
+
 CRITICAL_RULES_REGISTRY = {
-    'author_name': {
-        'id': RULE_ID_AUTHOR,
-        'name': 'Author Name',
-        'severity': 'Critical',
-        'description': 'Compare with original',
-        'needs_original': True,
-        'keywords': ['author name', 'author names', 'authors'],
-        'func': check_author_names,
-    },
-    'affiliation': {
-        'id': RULE_ID_AFFILIATION,
-        'name': 'Affiliation',
-        'severity': 'Critical',
-        'description': 'Compare with original',
-        'needs_original': True,
-        'keywords': ['affiliation', 'affiliations', 'institution'],
-        'func': check_affiliations,
-    },
-    'email': {
-        'id': 'EMAIL_CHECK',
-        'name': 'Corresponding Author Email',
-        'severity': 'Critical',
-        'description': 'Required + compare with original',
-        'needs_original': True,
-        'keywords': ['email', 'e-mail', 'corresponding author email',
-                     'corresponding email', 'email id'],
-        'func': check_email,
-    },
     'article_title': {
         'id': RULE_ID_TITLE,
         'name': 'Article Title',
@@ -1156,15 +1873,59 @@ CRITICAL_RULES_REGISTRY = {
         'keywords': ['article title', 'title', 'manuscript title'],
         'func': check_article_title,
     },
+    'author_name': {
+        'id': RULE_ID_AUTHOR,
+        'name': 'Author Name(s)',
+        'severity': 'Critical',
+        'description': 'Compare with original',
+        'needs_original': True,
+        'keywords': ['author name', 'author names', 'authors'],
+        'func': check_author_names,
+    },
+    'affiliation': {
+        'id': RULE_ID_AFFILIATION,
+        'name': 'Affiliation(s)',
+        'severity': 'Critical',
+        'description': 'Compare with original + superscript and mapping validation',
+        'needs_original': True,
+        'keywords': ['affiliation', 'affiliations', 'institution', 'superscript'],
+        'func': check_affiliations,
+    },
+    'corresponding_author_name': {
+        'id': RULE_ID_CORRESPONDING_NAME_CHANGED,
+        'name': 'Corresponding Author Name',
+        'severity': 'Critical',
+        'description': 'Required + compare with original',
+        'needs_original': True,
+        'keywords': ['corresponding author name', 'corresponding author', 'correspondence', 'email'],
+        'func': check_corresponding_author_name,
+    },
+    'references': {
+        'id': 'REFERENCES_CHECK',
+        'name': 'References',
+        'severity': 'Critical',
+        'description': 'Sequential numbering / citation order / alphabetical order',
+        'needs_original': False,
+        'keywords': ['reference', 'references', 'numbered references', 'citation', 'author-year'],
+        'func': check_references,
+    },
+    # Aliases for backward compatibility
+    'email': {
+        'id': 'EMAIL_CHECK',
+        'name': 'Corresponding Author Email',
+        'severity': 'Critical',
+        'description': 'Required + compare with original',
+        'needs_original': True,
+        'keywords': ['email', 'e-mail'],
+        'func': check_email,
+    },
     'numbered_references': {
         'id': 'NUMBERED_REFERENCES_CHECK',
         'name': 'Numbered References (Citation Order)',
         'severity': 'Critical',
         'description': 'Sequential numbering in first-citation order',
         'needs_original': False,
-        'keywords': ['numbered references', 'reference numbering',
-                     'sequential numbering', 'numbered citation',
-                     'citation order'],
+        'keywords': ['numbered references', 'reference numbering'],
         'func': check_numbered_references,
     },
     'author_year_references': {
@@ -1173,9 +1934,7 @@ CRITICAL_RULES_REGISTRY = {
         'severity': 'Critical',
         'description': 'Alphabetical by surname → author count → year',
         'needs_original': False,
-        'keywords': ['alphabetical order', 'author-year', 'author–year',
-                     'author year style', 'alphabetical author',
-                     'author year', 'alphabetical reference'],
+        'keywords': ['alphabetical order', 'author-year'],
         'func': check_author_year_reference_order,
     },
     'unnumbered_references': {
@@ -1184,8 +1943,7 @@ CRITICAL_RULES_REGISTRY = {
         'severity': 'Critical',
         'description': 'No numbers in reference list or section headings',
         'needs_original': False,
-        'keywords': ['unnumbered reference', 'unnumbered citation',
-                     'unnumbered'],
+        'keywords': ['unnumbered reference'],
         'func': check_unnumbered_references,
     },
 }
@@ -1214,14 +1972,14 @@ def _match_job_sheet_to_critical_rule(instruction_section, instruction_text):
 
         if has_author_year:
             matched_keys.append('author_year_references')
-            
+            matched_keys.append('references')
         if has_numbered:
             matched_keys.append('numbered_references')
-            
+            matched_keys.append('references')
         if has_unnumbered and not has_numbered:
             matched_keys.append('unnumbered_references')
+            matched_keys.append('references')
 
-    # ── Generic keyword matching ──
     for rule_key, rule_def in CRITICAL_RULES_REGISTRY.items():
         if rule_key in ('numbered_references', 'author_year_references', 'unnumbered_references'):
             continue
@@ -1235,14 +1993,19 @@ def _match_job_sheet_to_critical_rule(instruction_section, instruction_text):
     return matched_keys
 
 
-def run_critical_rules(original_text, edited_text, job_sheet_instructions):
-    """Execute critical rules that are explicitly enabled in the active job sheet.
+def run_critical_rules(original_text, edited_text, job_sheet_instructions=None):
+    """Execute the strict five mandatory critical rule groups:
+      1. Article Title
+      2. Author Name(s)
+      3. Affiliation(s)
+      4. Corresponding Author Name
+      5. References
 
-    Strict execution policy:
-      - Run ONLY rules that are explicitly enabled in the job sheet
-      - Do NOT run rules not assigned to this job sheet
-      - Do NOT use AI inference or fallback rules
-      - Use original manuscript as baseline for comparison rules
+    Strict validation output policy:
+      - Only these five rule groups may run and show results.
+      - Do not run, show, save, or display any other validation result.
+      - Do not show Warning, Review, Info, grammar, spelling, punctuation, formatting, style, table, figure, content-change, or any global rule result.
+      - Every issue produced by the allowed five rule groups must have Severity = Critical.
 
     Returns:
       (errors_list, active_rule_ids, rule_run_log)
@@ -1251,48 +2014,34 @@ def run_critical_rules(original_text, edited_text, job_sheet_instructions):
     active_rule_ids = []
     rule_run_log = []
 
-    if not job_sheet_instructions:
-        return errors, active_rule_ids, rule_run_log
+    # If specific instructions exist, they can inform reference style
+    MANDATORY_RULES = [
+        ('article_title', RULE_ID_TITLE, 'Article Title', lambda o, e: check_article_title(o, e, job_sheet_instructions), [original_text, edited_text]),
+        ('author_name', RULE_ID_AUTHOR, 'Author Name(s)', check_author_names, [original_text, edited_text]),
+        ('affiliation', RULE_ID_AFFILIATION, 'Affiliation(s)', check_affiliations, [original_text, edited_text]),
+        ('corresponding_author_name', RULE_ID_CORRESPONDING_NAME_CHANGED, 'Corresponding Author Name', check_corresponding_author_name, [original_text, edited_text]),
+        ('references', 'REFERENCES_CHECK', 'References', lambda o, e: check_references(e, job_sheet_instructions), [original_text, edited_text]),
+    ]
 
-    # Determine which critical rules are activated by the job sheet
-    activated_rules = {}
-    for instr in job_sheet_instructions:
-        section = instr.section if hasattr(instr, 'section') else instr.get('section', '')
-        instruction = instr.instruction if hasattr(instr, 'instruction') else instr.get('instruction', '')
-        status = instr.status if hasattr(instr, 'status') else instr.get('status', '')
-
-        if status == 'Manual Review Required':
-            continue
-
-        rule_keys = _match_job_sheet_to_critical_rule(section, instruction)
-        for rule_key in rule_keys:
-            if rule_key and rule_key not in activated_rules:
-                activated_rules[rule_key] = {
-                    'instruction_section': section,
-                    'instruction_text': instruction,
-                }
-
-    # Execute each activated rule
-    for rule_key, activation_info in activated_rules.items():
-        rule_def = CRITICAL_RULES_REGISTRY[rule_key]
-        rule_func = rule_def['func']
-        active_rule_ids.append(rule_def['id'])
-
+    for rule_key, rule_id, rule_name, rule_func, args in MANDATORY_RULES:
+        active_rule_ids.append(rule_id)
         log_entry = {
             'rule_key': rule_key,
-            'rule_id': rule_def['id'],
-            'rule_name': rule_def['name'],
-            'triggered_by': f"{activation_info['instruction_section']}: {activation_info['instruction_text']}",
+            'rule_id': rule_id,
+            'rule_name': rule_name,
+            'triggered_by': f'Mandatory Check: {rule_name}',
             'status': 'RUNNING',
             'errors_found': 0,
         }
 
         try:
-            if rule_def['needs_original']:
-                rule_errors = rule_func(original_text, edited_text)
-            else:
-                rule_errors = rule_func(edited_text)
-
+            rule_errors = rule_func(*args)
+            # Enforce Severity = Critical on every single issue
+            for e in rule_errors:
+                e['severity'] = 'CRITICAL'
+                e['category'] = 'CRITICAL'
+                if not e.get('field'):
+                    e['field'] = rule_name
             errors.extend(rule_errors)
             log_entry['status'] = 'COMPLETED'
             log_entry['errors_found'] = len(rule_errors)

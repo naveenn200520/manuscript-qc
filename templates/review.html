@@ -350,16 +350,19 @@
     }
 
     .fv-line.fv-line-selected {
-        background: var(--fv-selected);
+        background: #e0f2fe !important;
+        box-shadow: inset 4px 0 0 #2563eb;
+        transition: background 0.15s ease;
     }
 
     .fv-line.fv-line-selected .fv-line-indicator {
-        background: var(--fv-selected-border);
+        background: #2563eb;
     }
 
     .fv-line.fv-line-selected .fv-line-num {
-        color: var(--fv-info);
-        font-weight: 600;
+        color: #1d4ed8;
+        background: #dbeafe;
+        font-weight: 700;
     }
 
     /* Inline error highlight */
@@ -1161,20 +1164,21 @@
                     style="border: none; background: transparent; color: var(--fv-text-secondary); padding: 4px 12px; height: 28px !important; min-height: 28px !important; box-shadow: none;"
                     onclick="setCompareMode(true)">Compare Mode</button>
             </div>
-            <div class="fv-toolbar-stats">
-                <span class="fv-stat-chip error"><span class="fv-stat-dot error"></span><span id="statCritical">{{
-                        critical_count }}</span> Errors</span>
-                <span class="fv-stat-chip warning"><span class="fv-stat-dot warning"></span><span id="statReview">{{
-                        review_count }}</span> Review</span>
-                <span class="fv-stat-chip info"><span class="fv-stat-dot info"></span><span id="statWarning">{{
-                        warning_count }}</span> Info</span>
-                <span class="fv-stat-chip success"><span class="fv-stat-dot success"></span><span id="statResolved">{{
-                        resolved_errors }}</span> Done</span>
-                <span class="fv-stat-chip"
-                    style="background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; font-size: 11px;">
-                    Rules applied: {{ manuscript.applied_rules_count }} of {{ manuscript.total_available_rules }}
-                    available
-                </span>
+            <div class="fv-toolbar-stats" id="toolbarStatsContainer">
+                <div id="headerNoErrors" class="fv-stat-chip success" style="{% if critical_count > 0 %}display:none;{% else %}display:flex;{% endif %}align-items:center;gap:6px;font-weight:600;padding:5px 12px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:15px;height:15px;color:#059669;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    <span>5 mandatory checks completed — no Critical errors found.</span>
+                </div>
+                <div id="headerGroupChips" style="{% if critical_count == 0 %}display:none;{% else %}display:flex;{% endif %}align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span class="fv-stat-chip error" title="Article Title"><span class="fv-stat-dot error"></span>Title: <b id="statTitle" style="margin-left:3px">{{ rule_group_counts.article_title }}</b></span>
+                    <span class="fv-stat-chip error" title="Author Name(s)"><span class="fv-stat-dot error"></span>Authors: <b id="statAuthors" style="margin-left:3px">{{ rule_group_counts.author_name }}</b></span>
+                    <span class="fv-stat-chip error" title="Affiliation(s)"><span class="fv-stat-dot error"></span>Affiliations: <b id="statAffiliations" style="margin-left:3px">{{ rule_group_counts.affiliation }}</b></span>
+                    <span class="fv-stat-chip error" title="Corresponding Author Name"><span class="fv-stat-dot error"></span>Corresponding: <b id="statCorresponding" style="margin-left:3px">{{ rule_group_counts.corresponding_author_name }}</b></span>
+                    <span class="fv-stat-chip error" title="References"><span class="fv-stat-dot error"></span>References: <b id="statReferences" style="margin-left:3px">{{ rule_group_counts.references }}</b></span>
+                    <span class="fv-stat-chip success"><span class="fv-stat-dot success"></span>Done: <b id="statResolved" style="margin-left:3px">{{ resolved_errors }}</b></span>
+                </div>
             </div>
 
             <div class="fv-progress-wrap">
@@ -1303,15 +1307,20 @@
                 <div class="fv-panel-header-left">
                     <span class="fv-panel-title">Problems (<span id="openCount">{{ open_errors|length }}</span>)</span>
                     <span class="fv-panel-counts" id="panelCounts">
-                        {{ critical_count }} Errors, {{ review_count }} Review, {{ warning_count }} Info
+                        {% if critical_count == 0 %}
+                        5 mandatory checks completed — no Critical errors found.
+                        {% else %}
+                        Article Title: <b id="pTitle">{{ rule_group_counts.article_title }}</b> | Author Name(s): <b id="pAuthors">{{ rule_group_counts.author_name }}</b> | Affiliation(s): <b id="pAffil">{{ rule_group_counts.affiliation }}</b> | Corresponding Author Name: <b id="pCorr">{{ rule_group_counts.corresponding_author_name }}</b> | References: <b id="pRef">{{ rule_group_counts.references }}</b>
+                        {% endif %}
                     </span>
                 </div>
                 <div class="fv-panel-filters">
                     <button class="fv-filter-btn active" data-f="all" onclick="applyFilter('all',this)">All</button>
-                    <button class="fv-filter-btn" data-f="CRITICAL"
-                        onclick="applyFilter('CRITICAL',this)">Errors</button>
-                    <button class="fv-filter-btn" data-f="REVIEW" onclick="applyFilter('REVIEW',this)">Review</button>
-                    <button class="fv-filter-btn" data-f="WARNING" onclick="applyFilter('WARNING',this)">Info</button>
+                    <button class="fv-filter-btn" data-f="article_title" onclick="applyFilter('article_title',this)">Article Title (<span id="filterCountTitle">{{ rule_group_counts.article_title }}</span>)</button>
+                    <button class="fv-filter-btn" data-f="author_name" onclick="applyFilter('author_name',this)">Author Name(s) (<span id="filterCountAuthors">{{ rule_group_counts.author_name }}</span>)</button>
+                    <button class="fv-filter-btn" data-f="affiliation" onclick="applyFilter('affiliation',this)">Affiliation(s) (<span id="filterCountAffil">{{ rule_group_counts.affiliation }}</span>)</button>
+                    <button class="fv-filter-btn" data-f="corresponding_author_name" onclick="applyFilter('corresponding_author_name',this)">Corresponding Author Name (<span id="filterCountCorr">{{ rule_group_counts.corresponding_author_name }}</span>)</button>
+                    <button class="fv-filter-btn" data-f="references" onclick="applyFilter('references',this)">References (<span id="filterCountRef">{{ rule_group_counts.references }}</span>)</button>
                     <button class="fv-filter-btn" data-f="OPEN" onclick="applyFilter('OPEN',this)">Open Only</button>
                 </div>
             </div>
@@ -1333,21 +1342,19 @@
                         <tbody id="errBody">
                             {% for error in errors %}
                             <tr class="fv-err-row {{ 'fv-row-resolved' if error.status != 'OPEN' else '' }}"
-                                data-eid="{{ error.id }}" data-sev="{{ error.severity }}"
+                                data-eid="{{ error.id }}" data-sev="CRITICAL"
                                 data-status="{{ error.status }}" data-line="{{ error.line_number or 1 }}"
                                 data-col="{{ error.column_number or 1 }}" data-start="{{ error.start_offset }}"
                                 data-end="{{ error.end_offset }}" data-original="{{ error.original_text or '' }}"
                                 data-edited="{{ error.edited_text or '' }}" data-desc="{{ error.description or '' }}"
                                 data-etype="{{ error.error_type }}" data-ecode="{{ error.error_code or '' }}"
                                 data-suggested="{{ error.suggested_action or '' }}" data-field="{{ error.field or '' }}"
-                                onclick="selectRow(this)">
+                                data-group="{{ error.error_type|rule_group }}"
+                                onclick="selectRow(this)" ontouchstart="selectRow(this)">
                                 <td>
                                     <div class="fv-severity">
-                                        <span class="fv-sev-dot {{ error.severity }}"></span>
-                                        <span class="fv-sev-label {{ error.severity }}">
-                                            {% if error.severity == 'CRITICAL' %}Error{% elif error.severity == 'REVIEW'
-                                            %}Warning{% else %}Info{% endif %}
-                                        </span>
+                                        <span class="fv-sev-dot CRITICAL"></span>
+                                        <span class="fv-sev-label CRITICAL">Critical</span>
                                     </div>
                                 </td>
                                 <td>
@@ -1374,25 +1381,20 @@
                             </tr>
                             {% endfor %}
 
-                            {% if not errors %}
-                            <tr>
+                            <tr id="jsEmptyRow" style="{% if errors and open_errors %}display:none;{% endif %}">
                                 <td colspan="6">
-                                    <div class="fv-empty">
-                                        <div class="fv-empty-icon">
+                                    <div class="fv-empty" style="padding:32px 16px;text-align:center;">
+                                        <div class="fv-empty-icon" style="margin-bottom:8px;">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                                stroke-width="2" stroke="currentColor">
+                                                stroke-width="2" stroke="currentColor" style="width:28px;height:28px;color:#059669;margin:0 auto;">
                                                 <path stroke-linecap="round" stroke-linejoin="round"
                                                     d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
-                                        <p style="font-weight:600;color:var(--fv-success);margin:0">No problems found
-                                        </p>
-                                        <p style="font-size:12px;color:var(--fv-text-muted);margin:4px 0 0">The
-                                            manuscript passed all QC checks.</p>
+                                        <p style="font-weight:600;font-size:14px;color:#059669;margin:0">5 mandatory checks completed — no Critical errors found.</p>
                                     </div>
                                 </td>
                             </tr>
-                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -1737,39 +1739,98 @@
 
     function updateStats() {
         const rows = document.querySelectorAll('.fv-err-row');
-        let open = 0, crit = 0, rev = 0, warn = 0, resolved = 0;
+        let open = 0, resolved = 0;
+        let titleOpen = 0, authorsOpen = 0, affilOpen = 0, corrOpen = 0, refOpen = 0;
+
         rows.forEach(r => {
+            const grp = r.dataset.group;
             if (r.dataset.status === 'OPEN') {
                 open++;
-                if (r.dataset.sev === 'CRITICAL') crit++;
-                if (r.dataset.sev === 'REVIEW') rev++;
-                if (r.dataset.sev === 'WARNING') warn++;
-            } else resolved++;
+                if (grp === 'article_title') titleOpen++;
+                else if (grp === 'author_name') authorsOpen++;
+                else if (grp === 'affiliation') affilOpen++;
+                else if (grp === 'corresponding_author_name') corrOpen++;
+                else if (grp === 'references') refOpen++;
+            } else {
+                resolved++;
+            }
         });
 
-        document.getElementById('openCount').textContent = open;
-        document.getElementById('statCritical').textContent = crit;
-        document.getElementById('statReview').textContent = rev;
-        document.getElementById('statWarning').textContent = warn;
-        document.getElementById('statResolved').textContent = resolved;
-        document.getElementById('panelCounts').textContent = `${crit} Errors, ${rev} Review, ${warn} Info`;
+        const openCountEl = document.getElementById('openCount');
+        if (openCountEl) openCountEl.textContent = open;
+
+        const statTitle = document.getElementById('statTitle');
+        if (statTitle) statTitle.textContent = titleOpen;
+        const statAuthors = document.getElementById('statAuthors');
+        if (statAuthors) statAuthors.textContent = authorsOpen;
+        const statAffil = document.getElementById('statAffiliations');
+        if (statAffil) statAffil.textContent = affilOpen;
+        const statCorr = document.getElementById('statCorresponding');
+        if (statCorr) statCorr.textContent = corrOpen;
+        const statRef = document.getElementById('statReferences');
+        if (statRef) statRef.textContent = refOpen;
+        const statResolved = document.getElementById('statResolved');
+        if (statResolved) statResolved.textContent = resolved;
+
+        const fTitle = document.getElementById('filterCountTitle');
+        if (fTitle) fTitle.textContent = titleOpen;
+        const fAuthors = document.getElementById('filterCountAuthors');
+        if (fAuthors) fAuthors.textContent = authorsOpen;
+        const fAffil = document.getElementById('filterCountAffil');
+        if (fAffil) fAffil.textContent = affilOpen;
+        const fCorr = document.getElementById('filterCountCorr');
+        if (fCorr) fCorr.textContent = corrOpen;
+        const fRef = document.getElementById('filterCountRef');
+        if (fRef) fRef.textContent = refOpen;
+
+        const headerNoErrors = document.getElementById('headerNoErrors');
+        const headerGroupChips = document.getElementById('headerGroupChips');
+        const panelCounts = document.getElementById('panelCounts');
+        const jsEmptyRow = document.getElementById('jsEmptyRow');
+
+        if (open === 0) {
+            if (headerNoErrors) headerNoErrors.style.display = 'flex';
+            if (headerGroupChips) headerGroupChips.style.display = 'none';
+            if (panelCounts) panelCounts.textContent = '5 mandatory checks completed — no Critical errors found.';
+            if (jsEmptyRow) jsEmptyRow.style.display = '';
+        } else {
+            if (headerNoErrors) headerNoErrors.style.display = 'none';
+            if (headerGroupChips) headerGroupChips.style.display = 'flex';
+            if (panelCounts) {
+                panelCounts.innerHTML = `Article Title: <b>${titleOpen}</b> | Author Name(s): <b>${authorsOpen}</b> | Affiliation(s): <b>${affilOpen}</b> | Corresponding Author Name: <b>${corrOpen}</b> | References: <b>${refOpen}</b>`;
+            }
+            if (jsEmptyRow) jsEmptyRow.style.display = 'none';
+        }
 
         const total = rows.length;
         const pct = total > 0 ? Math.round((resolved / total) * 100) : 100;
-        document.getElementById('progressFill').style.width = pct + '%';
-        document.getElementById('progressText').textContent = pct + '%';
+        const pFill = document.getElementById('progressFill');
+        if (pFill) pFill.style.width = pct + '%';
+        const pText = document.getElementById('progressText');
+        if (pText) pText.textContent = pct + '%';
     }
 
     // ─── FILTER ───
     window.applyFilter = function (f, btn) {
         document.querySelectorAll('.fv-filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        document.querySelectorAll('.fv-err-row').forEach(row => {
+        const rows = document.querySelectorAll('.fv-err-row');
+        let visibleCount = 0;
+        rows.forEach(row => {
             let show = true;
-            if (f === 'CRITICAL' || f === 'REVIEW' || f === 'WARNING') show = row.dataset.sev === f;
-            else if (f === 'OPEN') show = row.dataset.status === 'OPEN';
+            if (f === 'OPEN') {
+                show = (row.dataset.status === 'OPEN');
+            } else if (f !== 'all') {
+                show = (row.dataset.group === f);
+            }
             row.style.display = show ? '' : 'none';
+            if (show) visibleCount++;
         });
+
+        const jsEmptyRow = document.getElementById('jsEmptyRow');
+        if (jsEmptyRow) {
+            jsEmptyRow.style.display = (visibleCount === 0) ? '' : 'none';
+        }
     };
 
     // ─── RESIZE HANDLE ───

@@ -38,6 +38,48 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 import json as _json
 app.jinja_env.filters['fromjson'] = _json.loads
 
+ALLOWED_CRITICAL_CODES = [
+    'ARTICLE_TITLE_CHANGED',
+    'ARTICLE_TITLE_CASE_INVALID',
+    'AUTHOR_NAME_CHANGED',
+    'AFFILIATION_CHANGED',
+    'AFFILIATION_SUPERSCRIPT_INVALID',
+    'CORRESPONDING_AUTHOR_NAME_CHANGED',
+    'CORRESPONDING_AUTHOR_NAME_MISSING',
+    'CORRESPONDING_AUTHOR_ASTERISK_MISSING',
+    'EMAIL_MISSING',
+    'EMAIL_INVALID',
+    'EMAIL_CHANGED',
+    'REFERENCE_NUMBER_DUPLICATE',
+    'REFERENCE_NUMBER_GAP',
+    'REFERENCE_NUMBER_OUT_OF_ORDER',
+    'REFERENCE_CITATION_ORDER_INVALID',
+    'REFERENCE_ALPHABETICAL_ORDER_INVALID',
+    'UNNUMBERED_REFERENCE_HAS_NUMBER',
+    'SECTION_HEADING_HAS_NUMBER',
+]
+
+def get_rule_group(error_type_or_code):
+    """Map error code or type to one of the 5 allowed rule groups."""
+    c = str(error_type_or_code or '').upper()
+    if 'TITLE' in c:
+        return 'article_title'
+    elif 'AUTHOR' in c and 'CORRESPONDING' not in c:
+        return 'author_name'
+    elif 'AFFILIATION' in c:
+        return 'affiliation'
+    elif 'CORRESPONDING' in c or 'EMAIL' in c:
+        return 'corresponding_author_name'
+    elif 'REF' in c or 'CITATION' in c or 'SECTION_HEADING' in c:
+        return 'references'
+    return 'article_title'
+
+app.jinja_env.filters['rule_group'] = get_rule_group
+
+@app.context_processor
+def inject_rule_helpers():
+    return {'get_rule_group': get_rule_group}
+
 db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -232,6 +274,41 @@ def new_project():
             fname = file_obj.filename.lower()
             try:
                 if fname.endswith('.docx') or fname.endswith('.doc'):
+                    # Preserve Word superscripts as Unicode superscript characters
+                    sup_map = {
+                        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+                        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+                        '+': '⁺', '-': '⁻', '*': '*', '†': '†', '‡': '‡',
+                        '§': '§', '¶': '¶', ',': ','
+                    }
+                    try:
+                        import docx
+                        doc = docx.Document(file_obj)
+                        lines = []
+                        for p in doc.paragraphs:
+                            p_parts = []
+                            for r in p.runs:
+                                t = r.text
+                                if not t:
+                                    continue
+                                is_sup = False
+                                if r.font.superscript:
+                                    is_sup = True
+                                elif r._r.rPr is not None:
+                                    vert = r._r.rPr.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vertAlign')
+                                    if vert is not None and vert.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val') == 'superscript':
+                                        is_sup = True
+                                if is_sup:
+                                    t = ''.join(sup_map.get(c, c) for c in t)
+                                p_parts.append(t)
+                            lines.append(''.join(p_parts))
+                        extracted = '\n'.join(lines)
+                        if extracted.strip():
+                            return extracted
+                    except Exception:
+                        pass
+                    # Fallback to mammoth
+                    file_obj.seek(0)
                     return mammoth.extract_raw_text(file_obj).value
                 elif fname.endswith('.xml') or fname.endswith('.txt'):
                     return file_obj.read().decode('utf-8', errors='ignore')
@@ -304,37 +381,18 @@ def new_project():
         db.session.add(manuscript)
         db.session.commit()
 
-        # Gather reference rules if a reference style is configured
-        reference_rules = []
-        if project.reference_style_id:
-            ref_style = db.session.get(ReferenceStyle, project.reference_style_id)
-            if ref_style:
-                reference_rules = [r for r in ref_style.rules if r.is_active]
-
-        # Gather team style rules
-        team_rules = StyleRule.query.filter_by(team_id=team_id, is_active=True, status='Active').all()
-
-        # Run the content-first QC engine
-        errors, applied_rule_ids, total_available_rules = run_content_qc(
-            original_text=author_text,
-            edited_text=edited_text,
-            job_sheet_instructions=job_sheet_instructions,
-            reference_rules=reference_rules,
-            style_rules=team_rules,
-        )
-
-        # ── Run Critical Rules (job-sheet-driven) ──
+        # ── Strict Validation Output Policy: Run ONLY the 5 Critical Rule Groups ──
         critical_errors, critical_rule_ids, critical_run_log = run_critical_rules(
             original_text=author_text,
             edited_text=edited_text,
             job_sheet_instructions=job_sheet_instructions,
         )
-        errors.extend(critical_errors)
-        applied_rule_ids.extend(critical_rule_ids)
+        errors = critical_errors
+        applied_rule_ids = critical_rule_ids
 
-        # Record rule application counts
-        manuscript.applied_rules_count = len(applied_rule_ids)
-        manuscript.total_available_rules = total_available_rules + len(critical_rule_ids)
+        # Exactly 5 mandatory checks
+        manuscript.applied_rules_count = 5
+        manuscript.total_available_rules = 5
         
         # Log to audit log
         import json
@@ -356,15 +414,15 @@ def new_project():
                 new_value=json.dumps(run_entry),
             ))
 
-        # Store error records
+        # Store error records — ONLY Critical severity errors from the 5 mandatory groups
         for e in errors:
             db.session.add(ErrorRecord(
                 manuscript_id=manuscript.id,
                 rule_id=e.get('rule_id') if isinstance(e.get('rule_id'), int) else None,
                 error_type=e['error_type'],
                 error_code=e.get('error_type'),
-                severity=e['severity'],
-                category=e.get('category', e['severity']),
+                severity='CRITICAL',
+                category='CRITICAL',
                 line_number=e.get('line_number'),
                 column_number=e.get('column_number'),
                 start_offset=e['start_offset'],
@@ -396,63 +454,35 @@ def review_project(project_id):
         abort(403)
     manuscript = project.manuscripts[0]
     
-    # 1. Clear old Job Sheet style errors
+    # 1. Purge any non-allowed / legacy / non-critical errors (spelling, style, content, info, review, warning)
     ErrorRecord.query.filter(
         ErrorRecord.manuscript_id == manuscript.id,
-        ErrorRecord.error_type.in_(['JOB_SHEET_STYLE', 'JOB_SHEET_STYLE_ERROR', 'SECTION_HEADING_SENTENCE_CASE'])
+        (~ErrorRecord.error_type.in_(ALLOWED_CRITICAL_CODES)) | (ErrorRecord.severity != 'CRITICAL')
     ).delete(synchronize_session=False)
     db.session.commit()
 
-    # 2. Get Job Sheet instructions and Style Rules
+    # 2. Get Job Sheet instructions if any
     job_sheet_instructions = []
     if project.job_sheet_id:
         job_sheet_instructions = JobSheetInstruction.query.filter_by(job_sheet_id=project.job_sheet_id).all()
-        
-    team_rules = StyleRule.query.filter_by(team_id=project.team_id, is_active=True, status='Active').all()
 
-    # 3. Re-run style rules only
-    errors, applied_rule_ids, total_available_rules = run_content_qc(
-        original_text=manuscript.original_text,
-        edited_text=manuscript.working_text,
-        job_sheet_instructions=job_sheet_instructions,
-        style_rules=team_rules,
-        run_spelling=False,
-        run_content=False,
-        run_references=False,
-        run_job_sheet=True
-    )
-    
-    # ── Also clear and re-run Critical Rules ──
-    critical_error_codes = [
-        'AUTHOR_NAME_CHANGED', 'AFFILIATION_CHANGED',
-        'EMAIL_MISSING', 'EMAIL_INVALID', 'EMAIL_CHANGED',
-        'ARTICLE_TITLE_CHANGED',
-        'REFERENCE_NUMBER_DUPLICATE', 'REFERENCE_NUMBER_GAP', 'REFERENCE_NUMBER_OUT_OF_ORDER',
-        'REFERENCE_CITATION_ORDER_INVALID',
-        'REFERENCE_ALPHABETICAL_ORDER_INVALID',
-        'UNNUMBERED_REFERENCE_HAS_NUMBER', 'SECTION_HEADING_HAS_NUMBER',
-    ]
-    
-    existing_critical = ErrorRecord.query.filter(
-        ErrorRecord.manuscript_id == manuscript.id,
-        ErrorRecord.error_code.in_(critical_error_codes)
-    ).all()
-    
-    existing_map = {}
-    for err in existing_critical:
-        sig = f"{err.error_code}:{err.original_text}:{err.edited_text}"
-        existing_map[sig] = err
+    # 3. Existing records for this manuscript to preserve resolved/approved status
+    existing_records = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).all()
+    preserved_status = {}
+    for r in existing_records:
+        key = (r.error_type, r.description)
+        if r.status != 'OPEN' and key not in preserved_status:
+            preserved_status[key] = r.status
 
+    # 4. Run ONLY the 5 mandatory Critical rule groups
     critical_errors, critical_rule_ids, critical_run_log = run_critical_rules(
         original_text=manuscript.original_text,
         edited_text=manuscript.working_text,
         job_sheet_instructions=job_sheet_instructions,
     )
-    
-    # We only extend applied_rule_ids
-    applied_rule_ids.extend(critical_rule_ids)
 
     # Log critical rule runs to audit
+    import json
     for run_entry in critical_run_log:
         db.session.add(AuditLog(
             user_id=current_user.id,
@@ -462,11 +492,9 @@ def review_project(project_id):
             new_value=json.dumps(run_entry),
         ))
 
-    # Update manuscript rule counts
-    manuscript.applied_rules_count = len(applied_rule_ids)
-    manuscript.total_available_rules = total_available_rules + len(critical_rule_ids)
-    
-    # Helper to calculate line and column from offset
+    manuscript.applied_rules_count = 5
+    manuscript.total_available_rules = 5
+
     def calc_line_col(text, offset):
         if offset is None: return 1, 1
         before = text[:offset]
@@ -474,134 +502,83 @@ def review_project(project_id):
         col = offset - before.rfind('\n') if '\n' in before else offset + 1
         return line, col
 
-    # Insert style/job-sheet errors (which were cleared earlier in the flow if applicable)
-    for err_dict in errors:
+    # Delete all previous error records for this manuscript so no stale ghost errors remain
+    for r in existing_records:
+        db.session.delete(r)
+    db.session.flush()
+
+    # Re-insert strictly the active critical errors with preserved status and accurate line/col
+    for err_dict in critical_errors:
         ln, col = calc_line_col(manuscript.working_text, err_dict.get('start_offset'))
+        key = (err_dict['error_type'], err_dict.get('description'))
+        st = preserved_status.get(key, 'OPEN')
         new_err = ErrorRecord(
             manuscript_id=manuscript.id,
             error_type=err_dict['error_type'],
             error_code=err_dict.get('error_type'),
-            severity=err_dict['severity'],
-            start_offset=err_dict['start_offset'],
-            end_offset=err_dict['end_offset'],
-            line_number=ln,
-            column_number=col,
-            original_text=err_dict['original_text'],
-            edited_text=err_dict['edited_text'],
-            description=err_dict['description'],
+            severity='CRITICAL',
+            category='CRITICAL',
+            start_offset=err_dict.get('start_offset', 0),
+            end_offset=err_dict.get('end_offset', 0),
+            line_number=err_dict.get('line_number') or ln,
+            column_number=err_dict.get('column_number') if isinstance(err_dict.get('column_number'), int) else col,
+            original_text=err_dict.get('original_text'),
+            edited_text=err_dict.get('edited_text'),
+            description=err_dict.get('description'),
             suggested_action=err_dict.get('suggested_action'),
             field=err_dict.get('field'),
-            status='OPEN',
-            rule_id=err_dict.get('rule_id') if isinstance(err_dict.get('rule_id'), int) else None,
+            status=st,
+            rule_id=None,
         )
         db.session.add(new_err)
-        
-    # Handle critical errors separately to preserve state
-    for err_dict in critical_errors:
-        sig = f"{err_dict.get('error_type')}:{err_dict['original_text']}:{err_dict['edited_text']}"
-        if sig in existing_map:
-            # Error already exists, keep it so status/approval is preserved
-            del existing_map[sig]
-        else:
-            ln, col = calc_line_col(manuscript.working_text, err_dict.get('start_offset'))
-            # New error
-            new_err = ErrorRecord(
-                manuscript_id=manuscript.id,
-                error_type=err_dict['error_type'],
-                error_code=err_dict.get('error_type'),
-                severity=err_dict['severity'],
-                start_offset=err_dict['start_offset'],
-                end_offset=err_dict['end_offset'],
-                line_number=ln,
-                column_number=col,
-                original_text=err_dict['original_text'],
-                edited_text=err_dict['edited_text'],
-                description=err_dict['description'],
-                suggested_action=err_dict.get('suggested_action'),
-                field=err_dict.get('field'),
-                status='OPEN',
-                rule_id=err_dict.get('rule_id') if isinstance(err_dict.get('rule_id'), int) else None,
-            )
-            db.session.add(new_err)
-            
-    # Delete stale critical errors that are no longer detected
-    for err in existing_map.values():
-        db.session.delete(err)
-        
+
     db.session.commit()
 
-    def matches_job_sheet(rule, instr):
-        r_name = rule.name.lower().strip()
-        r_name_no = r_name.replace(' ', '')
-        r_sec = (rule.section or '').lower().strip()
-        i_sec = instr.section.lower().strip()
-        i_val = instr.instruction.lower().strip()
-        i_val_no = i_val.replace(' ', '')
-        
-        if i_sec in (r_name, r_sec): return True
-        if i_val_no and i_val_no in (r_name_no, r_sec.replace(' ', '')): return True
-        if r_name and (r_name in i_sec or r_name_no in i_val_no): return True
-        return False
-
+    # 5 Critical Rule Groups stats
+    group_meta = [
+        ('article_title', 'Article Title', 'Must match approved original title'),
+        ('author_name', 'Author Name(s)', 'Must match approved original authors'),
+        ('affiliation', 'Affiliation(s)', 'Must match approved original and have valid superscript mapping'),
+        ('corresponding_author_name', 'Corresponding Author Name', 'Required, must match approved original correspondence and email'),
+        ('references', 'References', 'Sequential numbering, citation order, or alphabetical order'),
+    ]
     assigned_rules_stats = []
-    js_instrs_active = [i for i in job_sheet_instructions if i.status != 'Manual Review Required']
-    
-    # 1. Add all parsed job sheet instructions to the stats modal so the user sees them
-    for instr in js_instrs_active:
-        # Check if there are any JOB_SHEET_STYLE errors mentioning this section
-        issues_found = ErrorRecord.query.filter_by(manuscript_id=manuscript.id, error_type='JOB_SHEET_STYLE').filter(ErrorRecord.description.like(f"%{instr.section}%")).count()
-        
-        # Also check if it matched any dynamic rules and sum those issues
-        matched_rules = [r for r in team_rules if r.is_active and matches_job_sheet(r, instr)]
-        for r in matched_rules:
-            issues_found += ErrorRecord.query.filter_by(manuscript_id=manuscript.id, rule_id=r.id).count()
-
+    for g_id, g_name, g_exp in group_meta:
+        g_issues = len([e for e in critical_errors if get_rule_group(e.get('error_type')) == g_id])
         assigned_rules_stats.append({
-            'name': instr.section,
-            'section': 'Job Sheet',
+            'name': g_name,
+            'section': 'Mandatory Rule',
             'scope': 'Document',
-            'expected': instr.instruction,
-            'status': 'Applied' if issues_found > 0 else 'Checked',
-            'issues': issues_found
+            'expected': g_exp,
+            'status': 'Applied' if g_issues > 0 else 'Checked',
+            'issues': g_issues,
+            'severity': 'Critical',
         })
 
-    # Add Critical Rules to stats
-    for rule_key, rule_def in CRITICAL_RULES_REGISTRY.items():
-        if rule_def['id'] in critical_rule_ids:
-            crit_issues = len([e for e in critical_errors if e.get('error_type') in (
-                rule_def['id'],
-                # Handle email rule which has multiple codes
-                'EMAIL_MISSING', 'EMAIL_INVALID', 'EMAIL_CHANGED',
-            ) and rule_key in ('email',) or e.get('error_type') == rule_def['id']])
-            assigned_rules_stats.append({
-                'name': rule_def['name'],
-                'section': 'Critical Rule',
-                'scope': 'Document',
-                'expected': rule_def['description'],
-                'status': 'Applied' if crit_issues > 0 else 'Checked',
-                'issues': crit_issues,
-                'severity': 'Critical',
-            })
+    # Fetch all errors for rendering (strictly allowed critical codes)
+    all_errors = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).filter(
+        ErrorRecord.error_type.in_(ALLOWED_CRITICAL_CODES),
+        ErrorRecord.severity == 'CRITICAL'
+    ).order_by(ErrorRecord.start_offset).all()
 
-    # 4. Fetch all errors for rendering
-    all_errors = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).order_by(
-        ErrorRecord.start_offset
-    ).all()
-    
     open_errors = [e for e in all_errors if e.status == 'OPEN']
     total_errors = len(all_errors)
     resolved_errors = total_errors - len(open_errors)
     progress = int((resolved_errors / total_errors) * 100) if total_errors > 0 else 100
 
-    # Summary stats
-    critical_count = len([e for e in all_errors if e.severity == 'CRITICAL' and e.status == 'OPEN'])
-    review_count = len([e for e in all_errors if e.severity == 'REVIEW' and e.status == 'OPEN'])
-    style_count = len([e for e in all_errors if e.severity == 'Style' and e.status == 'OPEN'])
-    review_count += style_count # Include Style errors in the review count
-    warning_count = len([e for e in all_errors if e.severity == 'WARNING' and e.status == 'OPEN'])
+    # Summary stats by 5 groups
+    rule_group_counts = {
+        'article_title': len([e for e in all_errors if get_rule_group(e.error_type) == 'article_title' and e.status == 'OPEN']),
+        'author_name': len([e for e in all_errors if get_rule_group(e.error_type) == 'author_name' and e.status == 'OPEN']),
+        'affiliation': len([e for e in all_errors if get_rule_group(e.error_type) == 'affiliation' and e.status == 'OPEN']),
+        'corresponding_author_name': len([e for e in all_errors if get_rule_group(e.error_type) == 'corresponding_author_name' and e.status == 'OPEN']),
+        'references': len([e for e in all_errors if get_rule_group(e.error_type) == 'references' and e.status == 'OPEN']),
+    }
+    critical_count = sum(rule_group_counts.values())
+    review_count = 0
+    warning_count = 0
 
-    # ── Critical error blocking ──
-    # Unresolved critical errors that have NOT been explicitly approved block export/finalize/mark-done
+    # Critical error blocking
     open_critical = [e for e in all_errors if e.severity == 'CRITICAL' and e.status == 'OPEN']
     approved_critical_ids = set()
     if open_critical:
@@ -611,18 +588,19 @@ def review_project(project_id):
     unapproved_critical = [e for e in open_critical if e.id not in approved_critical_ids]
     critical_blocked = len(unapproved_critical) > 0
 
-    # QC status
-    qc_status = 'PASS' if critical_count == 0 and review_count == 0 else 'REVIEW REQUIRED'
+    qc_status = 'PASS' if critical_count == 0 else 'CRITICAL ERROR FOUND'
 
     return render_template('review.html', project=project, manuscript=manuscript,
                            errors=all_errors, open_errors=open_errors,
                            progress=progress, total_errors=total_errors,
                            resolved_errors=resolved_errors,
-                           critical_count=critical_count, review_count=review_count,
-                           warning_count=warning_count, qc_status=qc_status,
+                           critical_count=critical_count, review_count=0,
+                           warning_count=0, qc_status=qc_status,
                            assigned_rules_stats=assigned_rules_stats,
                            critical_blocked=critical_blocked,
-                           unapproved_critical_count=len(unapproved_critical))
+                           unapproved_critical_count=len(unapproved_critical),
+                           rule_group_counts=rule_group_counts,
+                           get_rule_group=get_rule_group)
 
 
 @app.route('/projects/<int:project_id>/qc-data')
@@ -635,7 +613,10 @@ def qc_data(project_id):
     if not is_admin() and project.team_id not in get_user_team_ids():
         abort(403)
     manuscript = project.manuscripts[0]
-    all_errors = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).order_by(
+    all_errors = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).filter(
+        ErrorRecord.error_type.in_(ALLOWED_CRITICAL_CODES),
+        ErrorRecord.severity == 'CRITICAL'
+    ).order_by(
         ErrorRecord.start_offset
     ).all()
 
@@ -644,7 +625,7 @@ def qc_data(project_id):
         errors_json.append({
             'id': e.id,
             'error_type': e.error_type,
-            'severity': e.severity,
+            'severity': 'CRITICAL',
             'line_number': e.line_number,
             'column_number': e.column_number,
             'start_offset': e.start_offset,
@@ -654,13 +635,13 @@ def qc_data(project_id):
             'context_before': e.context_before,
             'context_after': e.context_after,
             'description': e.description,
+            'suggested_action': e.suggested_action,
+            'group': get_rule_group(e.error_type),
             'status': e.status,
         })
 
     open_count = len([e for e in all_errors if e.status == 'OPEN'])
-    critical_count = len([e for e in all_errors if e.severity == 'CRITICAL' and e.status == 'OPEN'])
-    review_count = len([e for e in all_errors if e.severity == 'REVIEW' and e.status == 'OPEN'])
-    warning_count = len([e for e in all_errors if e.severity == 'WARNING' and e.status == 'OPEN'])
+    critical_count = open_count
 
     return jsonify({
         'manuscript_text': manuscript.working_text,
@@ -670,10 +651,10 @@ def qc_data(project_id):
             'total': len(all_errors),
             'open': open_count,
             'critical': critical_count,
-            'review': review_count,
-            'warning': warning_count,
+            'review': 0,
+            'warning': 0,
             'resolved': len(all_errors) - open_count,
-            'qc_status': 'PASS' if critical_count == 0 and review_count == 0 else 'REVIEW REQUIRED',
+            'qc_status': 'PASS' if critical_count == 0 else 'CRITICAL ERROR FOUND',
         }
     })
 
@@ -1291,4 +1272,5 @@ def not_found(e):
     return render_template('404.html'), 404
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)

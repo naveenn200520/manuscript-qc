@@ -608,7 +608,7 @@ def check_author_affiliation_formatting(edited_text):
     header = edited_text[:header_end]
     
     # 1. Affiliations starting with regular digits (1, 2, 3...) instead of superscript
-    affil_pat = r'^[ \t]*([1-9]+)\s*[-.]?\s*[A-Z]'
+    affil_pat = r'^[ \t]*([1-9]\d{0,1})(?!\d)\s*[-.]?\s*[A-Z]'
     for m in re.finditer(affil_pat, header, re.MULTILINE):
         marker = m.group(1)
         errors.append(make_error(
@@ -623,8 +623,9 @@ def check_author_affiliation_formatting(edited_text):
         ))
 
     # 2. Authors ending with regular digits instead of superscript
-    # Matches names followed by comma/space and a digit 1-9 (e.g., "John Smith, 1" or "Jane Doe 2")
-    author_marker_pat = r'\b([A-Z][a-z]+(?: [A-Z][a-z]+)*),?\s*([1-9]+[*,]*|[*,]+[1-9]+)(?!\s*(?:st|nd|rd|th))'
+    # Matches names followed by comma/space and a digit 1-99 (e.g., "John Smith, 1" or "Jane Doe 2")
+    # Limited to 1-2 digits and negative lookahead for digits to avoid matching postal codes
+    author_marker_pat = r'\b([A-Z][a-z]+(?: [A-Z][a-z]+)*),?\s*([1-9]\d{0,1}[*,]*|[*,]+[1-9]\d{0,1})(?!\d)(?!\s*(?:st|nd|rd|th))'
     for m in re.finditer(author_marker_pat, header):
         marker = m.group(2)
         if any(c.isdigit() for c in marker):
@@ -681,164 +682,18 @@ def check_author_affiliation_formatting(edited_text):
 def run_content_qc(original_text, edited_text, job_sheet_instructions=None,
                    reference_rules=None, style_rules=None, run_spelling=True, run_content=True, run_references=True, run_job_sheet=True):
     """
-    Main QC engine entry point.
+    Strict validation output policy:
+    Only the five mandatory Critical rule groups may run and show results:
+      1. Article Title
+      2. Author Name(s)
+      3. Affiliation(s)
+      4. Corresponding Author Name
+      5. References
 
-    Args:
-        original_text: The original manuscript content (source of truth)
-        edited_text: The edited manuscript content (being checked)
-        job_sheet_instructions: List of JobSheetInstruction objects
-        reference_rules: List of ReferenceRule objects
-        style_rules: List of StyleRule objects (legacy rule-based checks)
-
-    Returns:
-        List of error dicts ready to be stored as ErrorRecord rows.
-
-    IMPORTANT: This function NEVER modifies manuscript text.
+    All Warning, Review, Info, grammar, spelling, punctuation, formatting, style,
+    table, figure, content-change, and global rule results are disabled.
     """
-    global protected_terms_global
-
-    if not edited_text:
-        return []
-
-    all_errors = []
-
-    # Build protected terms from both manuscripts
-    protected = build_protected_terms(original_text or '', edited_text)
-    protected_terms_global = protected
-
-    # 1. Content comparison (Original vs Edited)
-    if run_content and original_text and original_text != edited_text:
-        content_errors = check_content_changes(original_text, edited_text)
-        all_errors.extend(content_errors)
-
-    # 2. Spelling check on edited manuscript
-    if run_spelling:
-        spelling_errors = check_spelling(edited_text, protected)
-        content_ranges = [(e['start_offset'], e['end_offset']) for e in all_errors]
-        for se in spelling_errors:
-            overlaps = any(
-                se['start_offset'] >= cr[0] and se['end_offset'] <= cr[1]
-                for cr in content_ranges
-            )
-            if not overlaps:
-                all_errors.append(se)
-
-    # 3. Job Sheet compliance
-    if run_job_sheet and job_sheet_instructions:
-        js_errors = check_job_sheet_compliance(edited_text, job_sheet_instructions)
-        all_errors.extend(js_errors)
-
-    # 4. Reference style validation
-    if run_references and reference_rules:
-        ref_errors = check_references(edited_text, reference_rules)
-        all_errors.extend(ref_errors)
-
-    # 4.5. Author/Affiliation Formatting (always runs on header)
-    affil_errors = check_author_affiliation_formatting(edited_text)
-    all_errors.extend(affil_errors)
-
-    js_instrs = [i for i in job_sheet_instructions if i.status != 'Manual Review Required'] if job_sheet_instructions else []
-    total_available_rules = 0
-    if style_rules and js_instrs:
-        total_available_rules = len([r for r in style_rules if r.is_active and next((i for i in js_instrs if i.section.lower().strip() in (r.name.lower().strip(), (r.section or '').lower().strip())), None)])
-
-    applied_rule_ids = []
-
-    # 5. Legacy style rules (filtered by Job Sheet)
-    if style_rules and job_sheet_instructions:
-        # Extract active job sheet instructions
-        js_instrs = [i for i in job_sheet_instructions if i.status != 'Manual Review Required']
-        
-        def matches_job_sheet(rule, instr):
-            r_name = rule.name.lower().strip()
-            r_name_no = r_name.replace(' ', '')
-            r_sec = (rule.section or '').lower().strip()
-            i_sec = instr.section.lower().strip()
-            i_val = (instr.instruction if hasattr(instr, 'instruction') else instr.get('instruction', '')).lower().strip()
-            i_val_no = i_val.replace(' ', '')
-            
-            if i_sec in (r_name, r_sec): return True
-            if i_val_no and i_val_no in (r_name_no, r_sec.replace(' ', '')): return True
-            if r_name and (r_name in i_sec or r_name_no in i_val_no): return True
-            return False
-
-        for rule in style_rules:
-            if not rule.is_active:
-                continue
-
-            # Check if this rule is explicitly assigned in the job sheet
-            matching_instr = next((i for i in js_instrs if matches_job_sheet(rule, i)), None)
-            
-            if not matching_instr:
-                # Rule not selected in job sheet -> skip
-                continue
-            
-            applied_rule_ids.append(rule.id)
-            instr_val = matching_instr.instruction.lower().strip()
-
-            # Special case: Heading sentence case
-            if rule.scope and rule.scope.lower() == 'all section headings':
-                # Find all potential headings in the text
-                for match in re.finditer(r'^[ \t]*([A-Za-z0-9][^\n]{1,150}?)[ \t]*$', edited_text, re.MULTILINE):
-                    found = match.group(1)
-                    if found.endswith('.'):
-                        continue # Probably a short sentence, not a heading
-                    
-                    sentence_cased = found[0].upper() + found[1:].lower() if found else ""
-                    
-                    if rule.replacement == '{sentence_case}':
-                        expected = sentence_cased
-                    else:
-                        expected = rule.replacement
-                        
-                    if found != expected:
-                        all_errors.append(make_error(
-                            error_type='SECTION_HEADING_SENTENCE_CASE' if rule.replacement == '{sentence_case}' else 'JOB_SHEET_STYLE',
-                            severity='Style',
-                            start_offset=match.start(1),
-                            end_offset=match.end(1),
-                            original_text=expected,
-                            edited_text=found,
-                            description=f'Section heading must use sentence case' if rule.replacement == '{sentence_case}' else f'Style rule "{rule.name}": expected "{expected}", found "{found}"',
-                            full_edited_text=edited_text,
-                            rule_id=rule.id,
-                        ))
-                continue
-
-            try:
-                if instr_val == 'initial word' or instr_val == 'initialword':
-                    # Must appear as the first word of the scope (e.g. beginning of a sentence/line)
-                    # Use a regex that matches at start of string or after a punctuation + space or newline
-                    pattern_str = r'(?:^|\n|(?<=[.!?]\s))\s*\b(' + re.escape(rule.find_pattern) + r')\b'
-                else:
-                    pattern_str = r'\b(' + re.escape(rule.find_pattern) + r')\b'
-                pattern = re.compile(pattern_str)
-            except Exception:
-                pattern = re.compile(re.escape(rule.find_pattern))
-
-            for match in pattern.finditer(edited_text):
-                found = match.group(1) if match.lastindex else match.group()
-                if found != rule.replacement:
-                    all_errors.append(make_error(
-                        error_type='JOB_SHEET_STYLE',
-                        severity='Style',
-                        start_offset=match.start(1) if match.lastindex else match.start(),
-                        end_offset=match.end(1) if match.lastindex else match.end(),
-                        original_text=rule.replacement,
-                        edited_text=found,
-                        description='Style rule "{}": expected "{}", found "{}"'.format(rule.name, rule.replacement, found),
-                        full_edited_text=edited_text,
-                        rule_id=rule.id,
-                    ))
-
-    # Sort by position in document
-    all_errors.sort(key=lambda e: (e['start_offset'], e['end_offset']))
-
-    # Assign sequential IDs
-    for i, err in enumerate(all_errors):
-        err['_seq'] = i + 1
-
-    return all_errors, applied_rule_ids, total_available_rules
+    return [], [], 5
 
 
 # ─────────────────────────────────────────────
