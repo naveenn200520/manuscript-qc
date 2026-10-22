@@ -269,20 +269,54 @@ def new_project():
             abort(403)
 
         def extract_text(file_obj):
-            if not file_obj or file_obj.filename == '':
+            if not file_obj or getattr(file_obj, 'filename', '') == '':
                 return None
             fname = file_obj.filename.lower()
+            sup_map = {
+                '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+                '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+                '+': '⁺', '-': '⁻', '*': '*', '†': '†', '‡': '‡',
+                '§': '§', '¶': '¶', ',': ','
+            }
             try:
                 if fname.endswith('.docx') or fname.endswith('.doc'):
-                    # Preserve Word superscripts as Unicode superscript characters
-                    sup_map = {
-                        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-                        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-                        '+': '⁺', '-': '⁻', '*': '*', '†': '†', '‡': '‡',
-                        '§': '§', '¶': '¶', ',': ','
-                    }
+                    # 1. Fast XML parse from docx zip without decompressing media
+                    try:
+                        import zipfile, xml.etree.ElementTree as ET
+                        file_obj.seek(0)
+                        lines = []
+                        with zipfile.ZipFile(file_obj) as z:
+                            xml_bytes = z.read('word/document.xml')
+                            root = ET.fromstring(xml_bytes)
+                            ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                            for p in root.iterfind('.//w:p', ns):
+                                p_parts = []
+                                for child in p:
+                                    tag = child.tag
+                                    if tag == '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r':
+                                        vert = child.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rPr/{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vertAlign')
+                                        is_sup = vert is not None and vert.attrib.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val') == 'superscript'
+                                        for r_child in child:
+                                            if r_child.tag == '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t':
+                                                t = r_child.text or ''
+                                                if is_sup:
+                                                    t = ''.join(sup_map.get(c, c) for c in t)
+                                                p_parts.append(t)
+                                            elif r_child.tag == '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tab':
+                                                p_parts.append('\t')
+                                            elif r_child.tag == '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}br':
+                                                p_parts.append('\n')
+                                lines.append(''.join(p_parts))
+                        extracted = '\n'.join(lines)
+                        if extracted.strip():
+                            return extracted
+                    except Exception:
+                        pass
+
+                    # 2. Fallback to python-docx
                     try:
                         import docx
+                        file_obj.seek(0)
                         doc = docx.Document(file_obj)
                         lines = []
                         for p in doc.paragraphs:
@@ -307,27 +341,37 @@ def new_project():
                             return extracted
                     except Exception:
                         pass
-                    # Fallback to mammoth
-                    file_obj.seek(0)
-                    return mammoth.extract_raw_text(file_obj).value
+
+                    # 3. Fallback to mammoth
+                    try:
+                        file_obj.seek(0)
+                        return mammoth.extract_raw_text(file_obj).value
+                    except Exception:
+                        pass
                 elif fname.endswith('.xml') or fname.endswith('.txt'):
+                    file_obj.seek(0)
                     return file_obj.read().decode('utf-8', errors='ignore')
             except Exception:
                 pass
             return None
 
-        file = request.files.get('manuscript_file')
-        if not file or file.filename == '':
-            flash('No author file selected', 'error')
+        # Check if text was pre-extracted on client-side (for instant upload of large docx files)
+        author_text = request.form.get('author_extracted_text')
+        if not author_text or not author_text.strip():
+            file = request.files.get('manuscript_file')
+            author_text = extract_text(file)
+
+        if not author_text or not author_text.strip():
+            err_msg = 'No author file content provided or file could not be read.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': err_msg}), 400
+            flash(err_msg, 'error')
             return redirect(request.url)
 
-        author_text = extract_text(file)
-        if author_text is None:
-            flash('Unsupported file type or error reading author file.', 'error')
-            return redirect(request.url)
-
-        my_file = request.files.get('xml_file')
-        my_text = extract_text(my_file)
+        my_text = request.form.get('edited_extracted_text')
+        if not my_text or not my_text.strip():
+            my_file = request.files.get('xml_file')
+            my_text = extract_text(my_file)
 
         project = Project(name=name, team_id=team_id)
         db.session.add(project)
@@ -338,8 +382,6 @@ def new_project():
         job_sheet_file = request.files.get('job_sheet_file')
         if job_sheet_file and job_sheet_file.filename != '':
             js_bytes = job_sheet_file.read()
-            with open('debug_jobsheet.pdf', 'wb') as f:
-                f.write(js_bytes)
             job_sheet = JobSheet(project_id=project.id, filename=job_sheet_file.filename,
                                  uploaded_by=current_user.id)
             db.session.add(job_sheet)
@@ -368,6 +410,7 @@ def new_project():
                     project.reference_style_id = ref_style.id
 
             db.session.commit()
+
             # Reload instructions from DB for QC engine
             job_sheet_instructions = JobSheetInstruction.query.filter_by(
                 job_sheet_id=job_sheet.id
@@ -440,6 +483,12 @@ def new_project():
         manuscript.status = 'QC Complete'
         db.session.commit()
         flash('Project created and QC completed.', 'success')
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+            return jsonify({
+                'success': True,
+                'project_id': project.id,
+                'redirect_url': url_for('review_project', project_id=project.id)
+            })
         return redirect(url_for('review_project', project_id=project.id))
     return render_template('new_project.html', teams=teams)
 

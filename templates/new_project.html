@@ -20,6 +20,9 @@
         <div class="p-4 max-w-4xl mx-auto w-full">
             <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
                 <form id="projectForm" action="{{ url_for('new_project') }}" method="POST" enctype="multipart/form-data" class="space-y-6 relative">
+                    <!-- Hidden inputs for pre-extracted text (bypasses serverless payload limits) -->
+                    <input type="hidden" id="author_extracted_text" name="author_extracted_text">
+                    <input type="hidden" id="edited_extracted_text" name="edited_extracted_text">
                     
                     <div>
                         <label for="name" class="block text-sm font-medium text-slate-700 mb-1">Project Name</label>
@@ -46,7 +49,7 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg>
                             </div>
                             <h3 class="font-medium text-slate-800 text-sm">Upload Job Sheet</h3>
-                            <p class="text-xs text-slate-500 mt-1" id="job-sheet-filename">Accepted formats: .xml, .docx</p>
+                            <p class="text-xs text-slate-500 mt-1" id="job-sheet-filename">Accepted formats: .xml, .docx, .pdf</p>
                         </div>
                     </div>
 
@@ -61,6 +64,7 @@
                                 </div>
                                 <h3 class="font-medium text-slate-800 text-sm">Author File</h3>
                                 <p class="text-xs text-slate-500 mt-1" id="docx-filename">Select File (.docx, .xml, .txt)</p>
+                                <span id="docx-badge" class="hidden inline-block mt-1 text-[11px] font-medium bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">✓ Ready</span>
                             </div>
                             
                             <!-- Your File Upload -->
@@ -71,43 +75,80 @@
                                 </div>
                                 <h3 class="font-medium text-slate-800 text-sm">Your File (Edited)</h3>
                                 <p class="text-xs text-slate-500 mt-1" id="xml-filename">Select File (.docx, .xml, .txt) - Optional</p>
+                                <span id="xml-badge" class="hidden inline-block mt-1 text-[11px] font-medium bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">✓ Ready</span>
                             </div>
                         </div>
                     </div>
 
                     <div class="pt-4 flex justify-end">
-                        <button type="button" onclick="startQC()" class="w-full md:w-auto bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center gap-2">
+                        <button type="button" id="submitBtn" onclick="startQC()" class="w-full md:w-auto bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center gap-2">
                             Create Project & Run QC
                         </button>
                     </div>
 
-                    <!-- Loading Overlay -->
-                    <div id="loadingOverlay" class="hidden absolute inset-0 bg-white/95 backdrop-blur-sm z-50 rounded-2xl flex-col items-center justify-center p-4">
-                        <div class="w-full max-w-md mx-auto">
-                            <h2 class="text-xl font-bold text-slate-800 mb-6 text-center">QC in Progress...</h2>
+                    <!-- Loading / Processing Overlay -->
+                    <div id="loadingOverlay" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 sm:p-8">
+                            <div class="flex items-center justify-between mb-4 border-b pb-3 border-slate-100">
+                                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full bg-brand-500 animate-pulse"></span>
+                                    QC in Progress...
+                                </h2>
+                                <span id="overallPercent" class="text-xs font-semibold text-brand-600 bg-brand-50 px-2 py-1 rounded">Processing</span>
+                            </div>
                             
                             <!-- Progress Steps -->
-                            <div class="space-y-4">
-                                <div class="flex items-center gap-3 step" id="step1">
-                                    <div class="w-6 h-6 rounded-full border-2 border-brand-500 flex items-center justify-center spinner">
+                            <div class="space-y-4 my-6">
+                                <!-- Step 1: Extracting content -->
+                                <div class="flex items-start gap-3 step" id="step1">
+                                    <div class="w-6 h-6 rounded-full border-2 border-brand-500 flex items-center justify-center spinner mt-0.5 shrink-0">
                                         <div class="w-2 h-2 bg-brand-500 rounded-full animate-ping"></div>
                                     </div>
-                                    <span class="text-sm font-medium text-slate-700">Uploading files...</span>
-                                </div>
-                                <div class="flex items-center gap-3 step opacity-40" id="step2">
-                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center icon-container">
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800">Extracting content from documents...</div>
+                                        <div class="text-xs text-slate-500 step-desc" id="step1-desc">Reading manuscript text and preserving formatting...</div>
                                     </div>
-                                    <span class="text-sm font-medium text-slate-700">Extracting content from DOCX...</span>
                                 </div>
-                                <div class="flex items-center gap-3 step opacity-40" id="step3">
-                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center icon-container">
+                                <!-- Step 2: Uploading -->
+                                <div class="flex items-start gap-3 step opacity-40" id="step2">
+                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center icon-container mt-0.5 shrink-0">
                                     </div>
-                                    <span class="text-sm font-medium text-slate-700">Running Style checks against rules...</span>
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800">Uploading to QC Engine...</div>
+                                        <div class="text-xs text-slate-500 step-desc" id="step2-desc">Sending lightweight extracted text payload...</div>
+                                    </div>
                                 </div>
-                                <div class="flex items-center gap-3 step opacity-40" id="step4">
-                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center icon-container">
+                                <!-- Step 3: Running Style & Critical checks -->
+                                <div class="flex items-start gap-3 step opacity-40" id="step3">
+                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center icon-container mt-0.5 shrink-0">
                                     </div>
-                                    <span class="text-sm font-medium text-slate-700">Finalizing error list...</span>
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800">Running Critical Rule Checks...</div>
+                                        <div class="text-xs text-slate-500 step-desc" id="step3-desc">Validating Title, Authors, Affiliations, Corresponding & References...</div>
+                                    </div>
+                                </div>
+                                <!-- Step 4: Finalizing -->
+                                <div class="flex items-start gap-3 step opacity-40" id="step4">
+                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center icon-container mt-0.5 shrink-0">
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800">Finalizing project & results...</div>
+                                        <div class="text-xs text-slate-500 step-desc" id="step4-desc">Preparing review workspace...</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Error Alert (hidden by default) -->
+                            <div id="errorBox" class="hidden mt-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                                <div class="flex items-center gap-2 font-bold mb-1">
+                                    <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                                    Processing Error
+                                </div>
+                                <p id="errorMessage" class="text-xs leading-relaxed"></p>
+                                <div class="mt-3 flex justify-end">
+                                    <button type="button" onclick="closeOverlay()" class="px-4 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                                        Dismiss & Retry
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -115,78 +156,340 @@
                 </form>
             </div>
             
+            <!-- JSZip: Local bundled with CDN fallback -->
+            <script src="{{ url_for('static', filename='js/jszip.min.js') }}"></script>
             <script>
-                // File input label updater
+                if (typeof JSZip === 'undefined') {
+                    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"><\/script>');
+                }
+            </script>
+
+            <script>
+                // Format file size
+                function formatFileSize(bytes) {
+                    if (bytes < 1024) return bytes + ' B';
+                    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+                }
+
+                // File input label updaters
                 document.getElementById('job_sheet_file').addEventListener('change', function(e) {
                     if(e.target.files.length > 0) {
-                        document.getElementById('job-sheet-filename').innerHTML = `&#10003; Job Sheet uploaded<br>Filename: ${e.target.files[0].name}`;
+                        const file = e.target.files[0];
+                        document.getElementById('job-sheet-filename').innerHTML = `✓ ${file.name} (${formatFileSize(file.size)})`;
                         document.getElementById('job-sheet-filename').classList.add('text-purple-600', 'font-medium');
                     }
                 });
+                
                 document.getElementById('docx_file').addEventListener('change', function(e) {
                     if(e.target.files.length > 0) {
-                        document.getElementById('docx-filename').textContent = e.target.files[0].name;
+                        const file = e.target.files[0];
+                        document.getElementById('docx-filename').textContent = `${file.name} (${formatFileSize(file.size)})`;
                         document.getElementById('docx-filename').classList.add('text-brand-600', 'font-medium');
+                        const badge = document.getElementById('docx-badge');
+                        badge.classList.remove('hidden');
+                        if (file.size > 3 * 1024 * 1024) {
+                            badge.textContent = '✓ Fast-Extract (Bypasses Size Limit)';
+                        } else {
+                            badge.textContent = '✓ Ready';
+                        }
                     }
                 });
+                
                 document.getElementById('xml_file').addEventListener('change', function(e) {
                     if(e.target.files.length > 0) {
-                        document.getElementById('xml-filename').textContent = e.target.files[0].name;
+                        const file = e.target.files[0];
+                        document.getElementById('xml-filename').textContent = `${file.name} (${formatFileSize(file.size)})`;
                         document.getElementById('xml-filename').classList.add('text-orange-600', 'font-medium');
+                        const badge = document.getElementById('xml-badge');
+                        badge.classList.remove('hidden');
+                        if (file.size > 3 * 1024 * 1024) {
+                            badge.textContent = '✓ Fast-Extract (Bypasses Size Limit)';
+                        } else {
+                            badge.textContent = '✓ Ready';
+                        }
                     }
                 });
 
-                // Simulation of QC Progress
-                function startQC() {
-                    if (!document.getElementById('docx_file').files.length) {
-                        alert("Please upload a DOCX file first.");
-                        return;
+                // Superscript character map matching Python backend
+                const supMap = {
+                    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+                    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+                    '+': '⁺', '-': '⁻', '*': '*', '†': '†', '‡': '‡',
+                    '§': '§', '¶': '¶', ',': ','
+                };
+
+                // Fast in-browser DOCX text extraction
+                async function extractFileText(file, onStatus) {
+                    if (!file) return null;
+                    const fname = file.name.toLowerCase();
+
+                    if (fname.endsWith('.txt') || fname.endsWith('.xml')) {
+                        if (onStatus) onStatus("Reading text...");
+                        return await file.text();
                     }
 
-                    const overlay = document.getElementById('loadingOverlay');
-                    overlay.classList.remove('hidden');
-                    overlay.classList.add('flex');
-                    
-                    const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-brand-500"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>`;
-                    const spinner = `<div class="w-2 h-2 bg-brand-500 rounded-full animate-ping"></div>`;
+                    if (fname.endsWith('.docx')) {
+                        if (onStatus) onStatus("Unzipping document structure...");
+                        if (typeof JSZip === 'undefined') {
+                            throw new Error("Zip decompression engine not available. Please check internet connection.");
+                        }
 
+                        const zip = await JSZip.loadAsync(file);
+                        const docXmlFile = zip.file("word/document.xml");
+                        if (!docXmlFile) {
+                            throw new Error("Invalid Word file: word/document.xml not found inside .docx archive.");
+                        }
+
+                        if (onStatus) onStatus("Extracting paragraphs and superscripts...");
+                        const xmlText = await docXmlFile.async("text");
+
+                        // Regex-based stream parser: fast, avoids full DOM tree overhead
+                        const pMatches = xmlText.match(/<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/g) || [];
+                        const lines = [];
+                        for (let i = 0; i < pMatches.length; i++) {
+                            const pXml = pMatches[i];
+                            let pText = '';
+                            const rMatches = pXml.match(/<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g) || [];
+                            for (let j = 0; j < rMatches.length; j++) {
+                                const rXml = rMatches[j];
+                                const isSup = /<w:vertAlign[^>]*w:val=["']superscript["']/i.test(rXml);
+                                const tMatches = rXml.match(/<w:t(?: [^>]*)?>([\s\S]*?)<\/w:t>/g) || [];
+                                for (let k = 0; k < tMatches.length; k++) {
+                                    let t = tMatches[k].replace(/^<w:t(?: [^>]*)?>/, '').replace(/<\/w:t>$/, '');
+                                    // Decode standard XML entities
+                                    t = t.replace(/&amp;/g, '&')
+                                         .replace(/&lt;/g, '<')
+                                         .replace(/&gt;/g, '>')
+                                         .replace(/&quot;/g, '"')
+                                         .replace(/&apos;/g, "'");
+                                    if (isSup) {
+                                        t = t.split('').map(c => supMap[c] || c).join('');
+                                    }
+                                    pText += t;
+                                }
+                                if (rXml.includes('<w:tab/>') || rXml.includes('<w:tab ')) {
+                                    pText += '\t';
+                                }
+                                if (rXml.includes('<w:br/>') || rXml.includes('<w:br ')) {
+                                    pText += '\n';
+                                }
+                            }
+                            lines.push(pText);
+                        }
+
+                        const result = lines.join('\n');
+                        if (onStatus) onStatus(`Extracted ${lines.length} paragraphs successfully.`);
+                        return result;
+                    }
+
+                    // For .doc or other formats, return null to let server handle
+                    return null;
+                }
+
+                const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-emerald-600"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>`;
+                const spinner = `<div class="w-2 h-2 bg-brand-500 rounded-full animate-ping"></div>`;
+
+                function activateStep(stepNum, statusText) {
                     const steps = [
                         document.getElementById('step1'),
                         document.getElementById('step2'),
                         document.getElementById('step3'),
                         document.getElementById('step4')
                     ];
-
-                    let currentStep = 0;
                     
-                    function nextStep() {
-                        if (currentStep > 0) {
-                            // Mark previous complete
-                            const prev = steps[currentStep - 1];
-                            const container = prev.querySelector('.w-6');
-                            container.innerHTML = checkIcon;
-                            container.classList.remove('border-brand-500');
-                            container.classList.add('border-brand-500');
-                        }
-                        
-                        if (currentStep < steps.length) {
-                            // Activate current
-                            const curr = steps[currentStep];
-                            curr.classList.remove('opacity-40');
-                            const container = curr.querySelector('.icon-container') || curr.querySelector('.w-6');
-                            container.classList.remove('border-slate-300');
-                            container.classList.add('border-brand-500');
-                            container.innerHTML = spinner;
-                            
-                            currentStep++;
-                            setTimeout(nextStep, 800); // 800ms per step simulation
-                        } else {
-                            // Done, submit the form!
-                            document.getElementById('projectForm').submit();
-                        }
+                    // Mark previous steps as complete
+                    for (let i = 0; i < stepNum - 1; i++) {
+                        const step = steps[i];
+                        step.classList.remove('opacity-40');
+                        const iconCont = step.querySelector('.w-6');
+                        iconCont.innerHTML = checkIcon;
+                        iconCont.classList.remove('border-brand-500', 'border-slate-300');
+                        iconCont.classList.add('border-emerald-500', 'bg-emerald-50');
                     }
 
-                    setTimeout(nextStep, 600);
+                    // Activate current step
+                    const curr = steps[stepNum - 1];
+                    curr.classList.remove('opacity-40');
+                    const iconCont = curr.querySelector('.icon-container') || curr.querySelector('.w-6');
+                    iconCont.innerHTML = spinner;
+                    iconCont.classList.remove('border-slate-300', 'border-emerald-500', 'bg-emerald-50');
+                    iconCont.classList.add('border-brand-500');
+
+                    if (statusText) {
+                        const desc = curr.querySelector('.step-desc');
+                        if (desc) desc.textContent = statusText;
+                    }
+                }
+
+                function markStepComplete(stepNum, statusText) {
+                    const step = document.getElementById('step' + stepNum);
+                    if (!step) return;
+                    step.classList.remove('opacity-40');
+                    const iconCont = step.querySelector('.w-6');
+                    iconCont.innerHTML = checkIcon;
+                    iconCont.classList.remove('border-brand-500', 'border-slate-300');
+                    iconCont.classList.add('border-emerald-500', 'bg-emerald-50');
+                    if (statusText) {
+                        const desc = step.querySelector('.step-desc');
+                        if (desc) desc.textContent = statusText;
+                    }
+                }
+
+                function closeOverlay() {
+                    const overlay = document.getElementById('loadingOverlay');
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('flex');
+                    document.getElementById('errorBox').classList.add('hidden');
+                }
+
+                function showError(msg) {
+                    const errorBox = document.getElementById('errorBox');
+                    const errorMsg = document.getElementById('errorMessage');
+                    errorMsg.textContent = msg;
+                    errorBox.classList.remove('hidden');
+                }
+
+                // Main QC execution flow
+                async function startQC() {
+                    const nameInput = document.getElementById('name');
+                    if (!nameInput.value.trim()) {
+                        alert("Please enter a Project Name.");
+                        nameInput.focus();
+                        return;
+                    }
+
+                    const docxInput = document.getElementById('docx_file');
+                    if (!docxInput.files.length) {
+                        alert("Please upload an Author File (.docx, .xml, .txt).");
+                        return;
+                    }
+
+                    const overlay = document.getElementById('loadingOverlay');
+                    overlay.classList.remove('hidden');
+                    overlay.classList.add('flex');
+                    document.getElementById('errorBox').classList.add('hidden');
+
+                    try {
+                        // ── Step 1: Extract Document Content ──
+                        activateStep(1, "Extracting text from author manuscript...");
+                        const authorFile = docxInput.files[0];
+                        let authorText = null;
+                        
+                        try {
+                            authorText = await extractFileText(authorFile, (msg) => {
+                                document.getElementById('step1-desc').textContent = msg;
+                            });
+                        } catch (e) {
+                            console.warn("Client-side extraction fallback:", e);
+                        }
+
+                        let editedText = null;
+                        const xmlInput = document.getElementById('xml_file');
+                        if (xmlInput.files.length > 0) {
+                            try {
+                                document.getElementById('step1-desc').textContent = "Extracting edited manuscript text...";
+                                editedText = await extractFileText(xmlInput.files[0]);
+                            } catch (e) {
+                                console.warn("Edited file extraction fallback:", e);
+                            }
+                        }
+
+                        markStepComplete(1, "Content extracted successfully.");
+
+                        // ── Step 2: Upload Payload ──
+                        activateStep(2, "Uploading extracted content to QC engine...");
+
+                        const formData = new FormData();
+                        formData.append('name', nameInput.value.trim());
+                        formData.append('team_id', document.getElementById('team_id').value);
+
+                        if (authorText && authorText.trim()) {
+                            formData.append('author_extracted_text', authorText);
+                            // Provide lightweight text file as placeholder to pass any legacy file checks
+                            formData.append('manuscript_file', new Blob([authorText], { type: 'text/plain' }), authorFile.name);
+                        } else {
+                            formData.append('manuscript_file', authorFile);
+                        }
+
+                        if (editedText && editedText.trim()) {
+                            formData.append('edited_extracted_text', editedText);
+                            formData.append('xml_file', new Blob([editedText], { type: 'text/plain' }), xmlInput.files[0].name);
+                        } else if (xmlInput.files.length > 0) {
+                            formData.append('xml_file', xmlInput.files[0]);
+                        }
+
+                        const jobSheetInput = document.getElementById('job_sheet_file');
+                        if (jobSheetInput.files.length > 0) {
+                            formData.append('job_sheet_file', jobSheetInput.files[0]);
+                        }
+
+                        // Use XMLHttpRequest for accurate upload progress tracking
+                        const response = await new Promise((resolve, reject) => {
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('POST', "{{ url_for('new_project') }}", true);
+                            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                            xhr.setRequestHeader('Accept', 'application/json');
+
+                            xhr.upload.onprogress = function(e) {
+                                if (e.lengthComputable) {
+                                    const percent = Math.round((e.loaded / e.total) * 100);
+                                    document.getElementById('step2-desc').textContent = `Uploading... ${percent}%`;
+                                    if (percent === 100) {
+                                        markStepComplete(2, "Upload complete.");
+                                        activateStep(3, "Running 5 Mandatory Critical Rule checks...");
+                                    }
+                                }
+                            };
+
+                            xhr.onload = function() {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    try {
+                                        const data = JSON.parse(xhr.responseText);
+                                        resolve(data);
+                                    } catch (err) {
+                                        // If server redirected directly
+                                        resolve({ success: true, redirect_url: xhr.responseURL });
+                                    }
+                                } else {
+                                    let errMsg = `Server returned error (${xhr.status})`;
+                                    try {
+                                        const data = JSON.parse(xhr.responseText);
+                                        if (data.error) errMsg = data.error;
+                                    } catch(e) {}
+                                    reject(new Error(errMsg));
+                                }
+                            };
+
+                            xhr.onerror = function() {
+                                reject(new Error("Network connection error or request timed out. If the file is very large, please check connection."));
+                            };
+
+                            xhr.ontimeout = function() {
+                                reject(new Error("Upload timed out. Please try again."));
+                            };
+
+                            xhr.send(formData);
+                        });
+
+                        // ── Step 3 & 4: Processing Completed ──
+                        markStepComplete(3, "Critical checks completed.");
+                        activateStep(4, "QC complete! Opening review...");
+                        markStepComplete(4, "Redirecting to project review...");
+
+                        // Redirect to the review workspace
+                        if (response && response.redirect_url) {
+                            window.location.href = response.redirect_url;
+                        } else if (response && response.project_id) {
+                            window.location.href = `/projects/${response.project_id}/review`;
+                        } else {
+                            window.location.href = "{{ url_for('projects') }}";
+                        }
+
+                    } catch (err) {
+                        console.error("QC Processing failed:", err);
+                        showError(err.message || "An unexpected error occurred during QC processing.");
+                    }
                 }
             </script>
         </div>
