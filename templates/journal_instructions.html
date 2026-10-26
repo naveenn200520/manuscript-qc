@@ -1,0 +1,659 @@
+{% extends "base.html" %}
+{% block title %}Journal Instruction Library - Manuscript QC Platform{% endblock %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    <!-- Sidebar -->
+    {% include '_sidebar.html' %}
+
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <!-- Top Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-10 flex-shrink-0">
+            <div>
+                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-0.5">
+                    <span>Admin Tools</span>
+                    <span>&rsaquo;</span>
+                    <span class="text-slate-800 font-semibold">Journal Instruction Library</span>
+                </div>
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Journal Instruction Library</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="openImportModal()"
+                    class="inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-medium text-sm shadow-sm transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4 text-purple-600">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    Import from XWiki
+                </button>
+                <button type="button" onclick="openAddModal()"
+                    class="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-sm shadow-brand-500/20 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    New Instruction
+                </button>
+            </div>
+        </header>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="px-8 pt-4">
+            {% for category, msg in messages %}
+            {% if 'Project created' not in msg %}
+            <div class="p-3 mb-2 rounded-lg text-sm flex items-center justify-between {% if category == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+                <span>{{ msg }}</span>
+                <button type="button" onclick="this.parentElement.remove()" class="text-xs font-bold ml-4">&times;</button>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="flex-1 overflow-y-auto p-8 space-y-6">
+            <!-- Metric Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Instructions</span>
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+                            {{ total_count }}
+                        </div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-900 mt-2">{{ total_count }}</div>
+                    <div class="text-xs text-slate-500 mt-1">Across {{ unique_journals_count }} journals</div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Instructions</span>
+                        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">
+                            {{ active_count }}
+                        </div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-900 mt-2">{{ active_count }}</div>
+                    <div class="text-xs text-emerald-600 mt-1 font-medium">Live in QC popup & rules</div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Reminder Only</span>
+                        <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                            {{ reminder_count }}
+                        </div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-900 mt-2">{{ reminder_count }}</div>
+                    <div class="text-xs text-slate-500 mt-1">Never produces QC errors</div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Validation Rules</span>
+                        <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xs">
+                            {{ validation_count }}
+                        </div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-900 mt-2">{{ validation_count }}</div>
+                    <div class="text-xs text-slate-500 mt-1">Gated by Job Sheet checks</div>
+                </div>
+            </div>
+
+            <!-- Filters & Search Toolbar -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-3 items-center justify-between">
+                <div class="flex flex-wrap gap-3 items-center flex-1 min-w-0">
+                    <!-- Search Input -->
+                    <div class="relative w-64 min-w-[200px]">
+                        <input type="text" id="instructionSearch" placeholder="Search instructions or journal..."
+                            oninput="filterTable()"
+                            class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+                            class="w-4 h-4 text-slate-400 absolute left-3 top-2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                    </div>
+
+                    <!-- Journal filter -->
+                    <select id="journalFilter" onchange="filterTable()"
+                        class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white text-slate-700">
+                        <option value="">All Journals</option>
+                        {% for jn in distinct_journals %}
+                        <option value="{{ jn }}">Journal {{ jn }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Type filter -->
+                    <select id="typeFilter" onchange="filterTable()"
+                        class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white text-slate-700">
+                        <option value="">All Types</option>
+                        <option value="Reminder Only">Reminder Only</option>
+                        <option value="Validation Rule">Validation Rule</option>
+                    </select>
+
+                    <!-- Priority filter -->
+                    <select id="priorityFilter" onchange="filterTable()"
+                        class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white text-slate-700">
+                        <option value="">All Priorities</option>
+                        <option value="High">High Priority</option>
+                        <option value="Medium">Medium Priority</option>
+                        <option value="Low">Low Priority</option>
+                    </select>
+
+                    <!-- Status filter -->
+                    <select id="statusFilter" onchange="filterTable()"
+                        class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white text-slate-700">
+                        <option value="">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+
+                <div class="text-xs text-slate-500 font-medium" id="tableRecordCount">
+                    Showing {{ instructions|length }} instructions
+                </div>
+            </div>
+
+            <!-- Table of Instructions -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm" id="instructionsTable">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Journal</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Instruction</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Source / Version</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100" id="instructionsBody">
+                            {% for inst in instructions %}
+                            <tr class="hover:bg-slate-50/80 transition-colors inst-row"
+                                data-id="{{ inst.id }}"
+                                data-journal="{{ inst.journal_number }}"
+                                data-journal-name="{{ (inst.journal_name or '')|lower }}"
+                                data-category="{{ inst.category or '' }}"
+                                data-text="{{ inst.instruction_text|lower }}"
+                                data-type="{{ inst.type }}"
+                                data-priority="{{ inst.priority }}"
+                                data-status="{% if inst.active %}active{% else %}inactive{% endif %}"
+                                data-source="{{ inst.source or '' }}"
+                                data-version="{{ inst.version or '' }}">
+                                
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200">
+                                            {{ inst.journal_number }}
+                                        </span>
+                                        {% if inst.journal_name %}
+                                        <span class="text-xs text-slate-600 font-medium truncate max-w-[140px]" title="{{ inst.journal_name }}">
+                                            {{ inst.journal_name }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
+                                        {{ inst.category or 'General' }}
+                                    </span>
+                                </td>
+
+                                <td class="py-3 px-4 max-w-md">
+                                    <p class="text-slate-800 text-sm font-normal line-clamp-2" title="{{ inst.instruction_text }}">
+                                        {{ inst.instruction_text }}
+                                    </p>
+                                </td>
+
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    {% if inst.type == 'Reminder Only' %}
+                                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                        Reminder Only
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                        Validation Rule
+                                    </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    {% if inst.priority == 'High' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                        High
+                                    </span>
+                                    {% elif inst.priority == 'Medium' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Medium
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                        Low
+                                    </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="py-3 px-4 whitespace-nowrap text-xs text-slate-500">
+                                    <div class="flex items-center gap-1">
+                                        <span class="font-medium text-slate-700">{{ inst.source or 'Manual' }}</span>
+                                        {% if inst.version %}
+                                        <span class="text-slate-400">· v{{ inst.version }}</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    {% if inst.active %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        Active
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        Inactive
+                                    </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="py-3 px-4 whitespace-nowrap text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <!-- Edit button -->
+                                        <button type="button" onclick="openEditModal({{ inst.id }})"
+                                            class="p-1.5 text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors" title="Edit">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                            </svg>
+                                        </button>
+
+                                        <!-- Toggle Active Form -->
+                                        <form action="{{ url_for('admin_journal_instructions_toggle', instruction_id=inst.id) }}" method="POST" class="inline">
+                                            <button type="submit" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                                title="{% if inst.active %}Deactivate{% else %}Activate{% endif %}">
+                                                {% if inst.active %}
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4 text-emerald-600">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
+                                                </svg>
+                                                {% else %}
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4 text-slate-400">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                                </svg>
+                                                {% endif %}
+                                            </button>
+                                        </form>
+
+                                        <!-- Delete Form -->
+                                        <form action="{{ url_for('admin_journal_instructions_delete', instruction_id=inst.id) }}" method="POST" class="inline"
+                                            onsubmit="return confirm('Permanently delete this instruction for Journal {{ inst.journal_number }}?')">
+                                            <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr id="emptyTableRow">
+                                <td colspan="8" class="py-12 text-center text-slate-500">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10 text-slate-300 mb-2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                                        </svg>
+                                        <p class="font-medium text-slate-700">No journal instructions found</p>
+                                        <p class="text-xs text-slate-400 mt-1">Get started by creating an instruction or importing from XWiki.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ADD / EDIT INSTRUCTION MODAL -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="instructionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <div>
+                <h3 id="modalTitle" class="text-base font-bold text-slate-900">Add Journal Instruction</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Define reminder or validation rules for specific journals.</p>
+            </div>
+            <button type="button" onclick="closeInstructionModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold p-1">&times;</button>
+        </div>
+
+        <form id="instructionForm" action="{{ url_for('admin_journal_instructions_create') }}" method="POST" class="p-6 overflow-y-auto space-y-4">
+            <input type="hidden" id="formInstructionId" name="instruction_id" value="">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                        Journal Number <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" id="modalJournalNumber" name="journal_number" required placeholder="e.g. 520, 052"
+                        class="w-full px-3 py-2 text-sm font-mono border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    <p class="text-[11px] text-slate-400 mt-1">Preserves leading zeros (e.g. "052"). First segment of Project ID.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                        Journal Name
+                    </label>
+                    <input type="text" id="modalJournalName" name="journal_name" placeholder="e.g. Nature Medicine"
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                        Category <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" id="modalCategory" name="category" list="categoryOptions" required placeholder="General"
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    <datalist id="categoryOptions">
+                        <option value="References">
+                        <option value="Author & Affiliations">
+                        <option value="Title & Abstract">
+                        <option value="Figures & Tables">
+                        <option value="Formatting">
+                        <option value="General">
+                    </datalist>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                        Type <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="modalType" name="type" required
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+                        <option value="Reminder Only">Reminder Only</option>
+                        <option value="Validation Rule">Validation Rule</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                        Priority <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="modalPriority" name="priority" required
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+                        <option value="High">High</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Instruction Text <span class="text-rose-500">*</span>
+                </label>
+                <textarea id="modalInstructionText" name="instruction_text" rows="3" required placeholder="Enter instruction details or guideline..."
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"></textarea>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Source</label>
+                    <input type="text" id="modalSource" name="source" placeholder="Manual / XWiki" value="Manual"
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Version</label>
+                    <input type="text" id="modalVersion" name="version" placeholder="1.0" value="1.0"
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2">
+                <input type="checkbox" id="modalActive" name="active" checked class="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500">
+                <label for="modalActive" class="text-sm font-medium text-slate-700">Active (Visible in manuscript QC review)</label>
+            </div>
+
+            <div class="pt-4 border-t border-slate-200 flex justify-end gap-3">
+                <button type="button" onclick="closeInstructionModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800">
+                    Cancel
+                </button>
+                <button type="submit" id="modalSubmitBtn" class="px-5 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg shadow-sm">
+                    Save Instruction
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- IMPORT FROM XWIKI MODAL -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="importModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-100 flex flex-col max-h-[92vh]">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-purple-50/50">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Import Instructions from XWiki</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Bulk import journal guidelines from XWiki JSON, CSV, or formatted table.</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold p-1">&times;</button>
+        </div>
+
+        <form action="{{ url_for('admin_journal_instructions_import_xwiki') }}" method="POST" enctype="multipart/form-data" class="p-6 overflow-y-auto space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Source Name</label>
+                    <input type="text" name="source" value="XWiki" required
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Version Identifier</label>
+                    <input type="text" name="version" value="XWiki-2026.1" required
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                        Paste Data (JSON array, CSV, or XWiki Table)
+                    </label>
+                    <button type="button" onclick="insertSampleImportData()" class="text-xs text-purple-600 hover:text-purple-700 font-semibold">
+                        + Insert Sample Data
+                    </button>
+                </div>
+                <textarea id="importPayload" name="payload" rows="8" placeholder="Paste XWiki JSON export or CSV data here...
+Example JSON:
+[
+  {
+    &quot;journalNumber&quot;: &quot;520&quot;,
+    &quot;journalName&quot;: &quot;Nature Medicine&quot;,
+    &quot;instructionText&quot;: &quot;All references must include DOI when available.&quot;,
+    &quot;type&quot;: &quot;Reminder Only&quot;,
+    &quot;priority&quot;: &quot;High&quot;,
+    &quot;category&quot;: &quot;References&quot;
+  }
+]"
+                    class="w-full px-3 py-2 text-xs font-mono border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Or Upload File (.json, .csv, .txt)
+                </label>
+                <input type="file" name="import_file" accept=".json,.csv,.txt"
+                    class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer">
+            </div>
+
+            <div class="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 border border-slate-200 space-y-1">
+                <p class="font-semibold text-slate-700">Supported formats:</p>
+                <p>• <b>JSON Array:</b> Object list with fields <code>journalNumber</code>, <code>instructionText</code>, <code>type</code>, <code>priority</code>, <code>category</code>.</p>
+                <p>• <b>CSV:</b> Header line <code>journalNumber,instructionText,type,priority,category,journalName</code></p>
+                <p>• <b>XWiki pipe table:</b> <code>| 520 | Check figures | Reminder Only | High | Figures |</code></p>
+            </div>
+
+            <div class="pt-4 border-t border-slate-200 flex justify-end gap-3">
+                <button type="button" onclick="closeImportModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm">
+                    Start Import
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function filterTable() {
+        const query = (document.getElementById('instructionSearch').value || '').toLowerCase().trim();
+        const jFilter = document.getElementById('journalFilter').value;
+        const tFilter = document.getElementById('typeFilter').value;
+        const pFilter = document.getElementById('priorityFilter').value;
+        const sFilter = document.getElementById('statusFilter').value;
+
+        const rows = document.querySelectorAll('.inst-row');
+        let visibleCount = 0;
+
+        rows.forEach(r => {
+            const jNum = r.dataset.journal || '';
+            const jName = r.dataset.journalName || '';
+            const cat = (r.dataset.category || '').toLowerCase();
+            const text = r.dataset.text || '';
+            const type = r.dataset.type || '';
+            const priority = r.dataset.priority || '';
+            const status = r.dataset.status || '';
+
+            const matchesQuery = !query ||
+                jNum.toLowerCase().includes(query) ||
+                jName.includes(query) ||
+                cat.includes(query) ||
+                text.includes(query);
+
+            const matchesJournal = !jFilter || jNum === jFilter;
+            const matchesType = !tFilter || type === tFilter;
+            const matchesPriority = !pFilter || priority === pFilter;
+            const matchesStatus = !sFilter || status === sFilter;
+
+            if (matchesQuery && matchesJournal && matchesType && matchesPriority && matchesStatus) {
+                r.style.display = '';
+                visibleCount++;
+            } else {
+                r.style.display = 'none';
+            }
+        });
+
+        document.getElementById('tableRecordCount').textContent = `Showing ${visibleCount} of ${rows.length} instructions`;
+    }
+
+    function openAddModal() {
+        document.getElementById('modalTitle').textContent = 'Add Journal Instruction';
+        document.getElementById('instructionForm').action = "{{ url_for('admin_journal_instructions_create') }}";
+        document.getElementById('formInstructionId').value = '';
+        document.getElementById('modalJournalNumber').value = '';
+        document.getElementById('modalJournalName').value = '';
+        document.getElementById('modalCategory').value = 'General';
+        document.getElementById('modalType').value = 'Reminder Only';
+        document.getElementById('modalPriority').value = 'Medium';
+        document.getElementById('modalInstructionText').value = '';
+        document.getElementById('modalSource').value = 'Manual';
+        document.getElementById('modalVersion').value = '1.0';
+        document.getElementById('modalActive').checked = true;
+        document.getElementById('modalSubmitBtn').textContent = 'Create Instruction';
+        document.getElementById('instructionModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id) {
+        const row = document.querySelector(`.inst-row[data-id="${id}"]`);
+        if (!row) return;
+
+        document.getElementById('modalTitle').textContent = 'Edit Journal Instruction';
+        document.getElementById('instructionForm').action = `/admin/journal-instructions/${id}/edit`;
+        document.getElementById('formInstructionId').value = id;
+        document.getElementById('modalJournalNumber').value = row.dataset.journal;
+        document.getElementById('modalJournalName').value = row.querySelector('[title]')?.title || '';
+        document.getElementById('modalCategory').value = row.dataset.category;
+        document.getElementById('modalType').value = row.dataset.type;
+        document.getElementById('modalPriority').value = row.dataset.priority;
+        document.getElementById('modalInstructionText').value = row.querySelector('p')?.title || row.querySelector('p')?.textContent.trim();
+        document.getElementById('modalSource').value = row.dataset.source || 'Manual';
+        document.getElementById('modalVersion').value = row.dataset.version || '1.0';
+        document.getElementById('modalActive').checked = (row.dataset.status === 'active');
+        document.getElementById('modalSubmitBtn').textContent = 'Update Instruction';
+        document.getElementById('instructionModal').classList.remove('hidden');
+    }
+
+    function closeInstructionModal() {
+        document.getElementById('instructionModal').classList.add('hidden');
+    }
+
+    function openImportModal() {
+        document.getElementById('importModal').classList.remove('hidden');
+    }
+
+    function closeImportModal() {
+        document.getElementById('importModal').classList.add('hidden');
+    }
+
+    function insertSampleImportData() {
+        const sample = [
+            {
+                "journalNumber": "520",
+                "journalName": "Nature Medicine",
+                "instructionText": "Verify that all references with DOI are hyperlinked as per CrossRef specs.",
+                "type": "Reminder Only",
+                "priority": "High",
+                "category": "References"
+            },
+            {
+                "journalNumber": "520",
+                "journalName": "Nature Medicine",
+                "instructionText": "Corresponding author must provide an official institutional email address.",
+                "type": "Reminder Only",
+                "priority": "High",
+                "category": "Author & Affiliations"
+            },
+            {
+                "journalNumber": "520",
+                "journalName": "Nature Medicine",
+                "instructionText": "Abstract must be unstructured and not exceed 250 words.",
+                "type": "Reminder Only",
+                "priority": "Medium",
+                "category": "Title & Abstract"
+            },
+            {
+                "journalNumber": "540",
+                "journalName": "Journal of Biological Chemistry",
+                "instructionText": "Ensure APA 7th edition reference formatting is maintained across all entries.",
+                "type": "Reminder Only",
+                "priority": "High",
+                "category": "References"
+            },
+            {
+                "journalNumber": "052",
+                "journalName": "The Lancet Oncology",
+                "instructionText": "Numbered Vancouver references required in square brackets.",
+                "type": "Reminder Only",
+                "priority": "High",
+                "category": "References"
+            }
+        ];
+        document.getElementById('importPayload').value = JSON.stringify(sample, null, 2);
+    }
+</script>
+{% endblock %}

@@ -717,8 +717,13 @@ def restore_original(working_text, error_record):
     end = error_record.end_offset
     original = error_record.original_text
 
-    if original and original not in ('[NOT IN ORIGINAL]', '[DELETED]'):
-        new_text = working_text[:start] + original + working_text[end:]
-        return new_text
+    if not original or original in ('[NOT IN ORIGINAL]', '[DELETED]'):
+        return working_text
 
-    return working_text
+    # If this is a missing reference gap insertion
+    edited_val = str(getattr(error_record, 'edited_text', '') or '')
+    if error_record.error_type == 'REFERENCE_NUMBER_GAP' or edited_val.startswith('[MISSING'):
+        insert_text = original if original.endswith('\n') else original + '\n'
+        return working_text[:start] + insert_text + working_text[start:]
+
+    return working_text[:start] + original + working_text[end:]

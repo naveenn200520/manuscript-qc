@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Image Standards - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-slate-50">
+    {% include '_sidebar.html' %}
+
+    <main class="flex-1 flex flex-col overflow-y-auto">
+        <!-- Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-10 sticky top-0 shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-teal-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                        Image Quality Standards
+                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">Journal Guard Artwork Engine</span>
+                    </h1>
+                    <p class="text-xs text-slate-500">Configure resolution, DPI, dimensions, and sharpness thresholds for publications</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <form action="{{ url_for('reset_image_criteria_defaults') }}" method="POST" onsubmit="return confirm('Restore international standard presets (Nature, Elsevier, IEEE norms)?');">
+                    <button type="submit" class="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        Sync Standards
+                    </button>
+                </form>
+                <button type="button" onclick="openAddModal()" class="px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 rounded-lg shadow-md shadow-teal-500/20 transition-all flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                    New Image Standard
+                </button>
+            </div>
+        </header>
+
+        <div class="p-8 max-w-7xl mx-auto w-full space-y-6">
+            <!-- Flashes -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="p-4 rounded-xl border flex items-center justify-between {% if category == 'error' %}bg-rose-50 border-rose-200 text-rose-800{% else %}bg-emerald-50 border-emerald-200 text-emerald-800{% endif %}">
+                            <span class="text-sm font-medium">{{ message }}</span>
+                            <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-xl">
+                        {{ total_count }}
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Standards</p>
+                        <h4 class="text-lg font-bold text-slate-800">Publishing Criteria</h4>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xl">
+                        {{ active_count }}
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Rules</p>
+                        <h4 class="text-lg font-bold text-slate-800">Enforced During QC</h4>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center font-bold text-xl">
+                        {{ unique_journals }}
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Configured Journals</p>
+                        <h4 class="text-lg font-bold text-slate-800">Global & Specific</h4>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <form method="GET" action="{{ url_for('admin_image_criteria') }}" class="flex flex-wrap items-center gap-3">
+                    <div class="relative">
+                        <input type="text" name="journal" value="{{ journal_filter }}" placeholder="Journal # (e.g. ALL, 520)..."
+                               class="w-48 px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+
+                    <select name="category" class="px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <option value="">All Categories</option>
+                        <option value="Halftone / Photo" {% if category_filter == 'Halftone / Photo' %}selected{% endif %}>Halftone / Photo</option>
+                        <option value="Line Art" {% if category_filter == 'Line Art' %}selected{% endif %}>Line Art</option>
+                        <option value="Combination Art" {% if category_filter == 'Combination Art' %}selected{% endif %}>Combination Art</option>
+                        <option value="Color Artwork" {% if category_filter == 'Color Artwork' %}selected{% endif %}>Color Artwork</option>
+                    </select>
+
+                    <select name="status" class="px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <option value="">All Statuses</option>
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+
+                    <button type="submit" class="px-3.5 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white rounded-lg transition-colors">
+                        Filter
+                    </button>
+                    {% if journal_filter or category_filter or status_filter %}
+                        <a href="{{ url_for('admin_image_criteria') }}" class="text-xs text-slate-500 hover:text-slate-700 underline">Clear</a>
+                    {% endif %}
+                </form>
+
+                <div class="text-xs text-slate-500">
+                    Showing <span class="font-bold text-slate-700">{{ criteria|length }}</span> standards
+                </div>
+            </div>
+
+            <!-- Standards Table -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                <th class="py-3 px-5">Journal</th>
+                                <th class="py-3 px-5">Category</th>
+                                <th class="py-3 px-5">Min / Rec DPI</th>
+                                <th class="py-3 px-5">Min Dimensions</th>
+                                <th class="py-3 px-5">Formats & Color</th>
+                                <th class="py-3 px-5">Sharpness</th>
+                                <th class="py-3 px-5">Status</th>
+                                <th class="py-3 px-5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-xs">
+                            {% for c in criteria %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3 px-5">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-[11px] {% if c.journal_number == 'ALL' %}bg-purple-50 text-purple-700 border border-purple-200{% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}">
+                                        {{ c.journal_number }}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-5 font-semibold text-slate-800">
+                                    {{ c.category }}
+                                    {% if c.notes %}
+                                        <p class="text-[11px] text-slate-400 font-normal truncate max-w-xs" title="{{ c.notes }}">{{ c.notes }}</p>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-5">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="inline-block px-2 py-0.5 rounded-full font-bold text-[11px] {% if c.min_dpi >= 600 %}bg-emerald-100 text-emerald-800{% elif c.min_dpi >= 300 %}bg-teal-100 text-teal-800{% else %}bg-amber-100 text-amber-800{% endif %}">
+                                            {{ c.min_dpi }} DPI
+                                        </span>
+                                        <span class="text-slate-400">/</span>
+                                        <span class="text-[11px] text-slate-500 font-medium">{{ c.recommended_dpi }} DPI</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-5 text-slate-600 font-mono text-[11px]">
+                                    {{ c.min_width_px }} &times; {{ c.min_height_px }} px
+                                    <span class="text-[10px] text-slate-400 block font-sans">Max {{ c.max_file_size_mb|round|int }} MB</span>
+                                </td>
+                                <td class="py-3 px-5 text-slate-600">
+                                    <div class="text-[11px] font-medium text-slate-700 truncate max-w-xs" title="{{ c.allowed_formats }}">{{ c.allowed_formats }}</div>
+                                    <span class="text-[10px] text-slate-400 block truncate max-w-xs" title="{{ c.allowed_color_modes }}">{{ c.allowed_color_modes }}</span>
+                                </td>
+                                <td class="py-3 px-5 text-slate-600 font-mono">
+                                    &ge; {{ c.min_sharpness_score }}
+                                </td>
+                                <td class="py-3 px-5">
+                                    <button type="button" onclick="toggleActive({{ c.id }}, this)" 
+                                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all {% if c.is_active %}bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100{% else %}bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200{% endif %}">
+                                        <span class="w-1.5 h-1.5 rounded-full {% if c.is_active %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
+                                        <span>{{ 'Active' if c.is_active else 'Inactive' }}</span>
+                                    </button>
+                                </td>
+                                <td class="py-3 px-5 text-right">
+                                    <div class="inline-flex items-center gap-1 justify-end">
+                                        <button type="button" onclick='openEditModal({{ c.to_dict()|tojson }})'
+                                                class="p-1.5 text-slate-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Edit Criteria">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        </button>
+                                        <form action="{{ url_for('delete_image_criterion', criterion_id=c.id) }}" method="POST" onsubmit="return confirm('Delete this image quality standard?');" class="inline">
+                                            <button type="submit" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete Criteria">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-12 text-slate-400">
+                                    <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    </div>
+                                    <p class="font-semibold text-slate-600">No Image Criteria configured.</p>
+                                    <p class="text-xs text-slate-400 mt-1">Click "Sync Standards" above to import Nature/Elsevier publishing defaults.</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Add / Edit Modal -->
+<div id="criteriaModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h3 id="modalTitle" class="text-base font-bold text-slate-800 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                New Image Standard
+            </h3>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+        </div>
+
+        <form id="criteriaForm" method="POST" action="{{ url_for('create_image_criterion') }}" class="p-6 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Journal Number</label>
+                    <input type="text" name="journal_number" id="m_journal_number" required value="ALL" placeholder="ALL or specific e.g. 520"
+                           class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    <span class="text-[10px] text-slate-400">Use 'ALL' for global default across all journals</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                    <select name="category" id="m_category" required class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <option value="Halftone / Photo">Halftone / Photo (Photographs, Micrographs)</option>
+                        <option value="Line Art">Line Art (Charts, Graphs, Plots)</option>
+                        <option value="Combination Art">Combination Art (Photo + Labels)</option>
+                        <option value="Color Artwork">Color Artwork (Medical/Bio Diagrams)</option>
+                        <option value="General Artwork">General Artwork</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1">Min DPI</label>
+                    <input type="number" name="min_dpi" id="m_min_dpi" required value="300" min="72" max="2400"
+                           class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1">Recommended DPI</label>
+                    <input type="number" name="recommended_dpi" id="m_recommended_dpi" required value="300" min="72" max="2400"
+                           class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1">Min Width (px)</label>
+                    <input type="number" name="min_width_px" id="m_min_width_px" required value="1000" min="100" max="10000"
+                           class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1">Min Height (px)</label>
+                    <input type="number" name="min_height_px" id="m_min_height_px" required value="800" min="100" max="10000"
+                           class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Max File Size (MB)</label>
+                    <input type="number" step="0.5" name="max_file_size_mb" id="m_max_file_size_mb" required value="50.0" min="1" max="500"
+                           class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Allowed Color Modes</label>
+                    <input type="text" name="allowed_color_modes" id="m_allowed_color_modes" required value="RGB, CMYK, Grayscale"
+                           class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Min Sharpness Score</label>
+                    <input type="number" step="1" name="min_sharpness_score" id="m_min_sharpness_score" required value="30.0" min="5" max="300"
+                           class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Allowed File Formats</label>
+                <input type="text" name="allowed_formats" id="m_allowed_formats" required value="TIFF, EPS, PNG, JPEG"
+                       class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Guidelines & Notes</label>
+                <textarea name="notes" id="m_notes" rows="2" placeholder="e.g. Requires 300 DPI minimum at 85mm single-column width."
+                          class="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-md shadow-teal-500/20 transition-all">
+                    Save Standard
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openAddModal() {
+    document.getElementById('modalTitle').innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span> New Image Standard';
+    document.getElementById('criteriaForm').action = "{{ url_for('create_image_criterion') }}";
+    document.getElementById('m_journal_number').value = 'ALL';
+    document.getElementById('m_category').value = 'Halftone / Photo';
+    document.getElementById('m_min_dpi').value = 300;
+    document.getElementById('m_recommended_dpi').value = 300;
+    document.getElementById('m_min_width_px').value = 1000;
+    document.getElementById('m_min_height_px').value = 800;
+    document.getElementById('m_max_file_size_mb').value = 50.0;
+    document.getElementById('m_allowed_color_modes').value = 'RGB, CMYK, Grayscale';
+    document.getElementById('m_allowed_formats').value = 'TIFF, EPS, PNG, JPEG';
+    document.getElementById('m_min_sharpness_score').value = 30.0;
+    document.getElementById('m_notes').value = '';
+    document.getElementById('criteriaModal').classList.remove('hidden');
+}
+
+function openEditModal(c) {
+    document.getElementById('modalTitle').innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> Edit Image Standard (' + c.journal_number + ')';
+    document.getElementById('criteriaForm').action = "/admin/image-criteria/" + c.id + "/edit";
+    document.getElementById('m_journal_number').value = c.journal_number;
+    document.getElementById('m_category').value = c.category;
+    document.getElementById('m_min_dpi').value = c.min_dpi;
+    document.getElementById('m_recommended_dpi').value = c.recommended_dpi;
+    document.getElementById('m_min_width_px').value = c.min_width_px;
+    document.getElementById('m_min_height_px').value = c.min_height_px;
+    document.getElementById('m_max_file_size_mb').value = c.max_file_size_mb;
+    document.getElementById('m_allowed_color_modes').value = c.allowed_color_modes;
+    document.getElementById('m_allowed_formats').value = c.allowed_formats;
+    document.getElementById('m_min_sharpness_score').value = c.min_sharpness_score;
+    document.getElementById('m_notes').value = c.notes || '';
+    document.getElementById('criteriaModal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('criteriaModal').classList.add('hidden');
+}
+
+function toggleActive(id, btn) {
+    fetch('/admin/image-criteria/' + id + '/toggle', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (data.is_active) {
+                    btn.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100";
+                    btn.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span>Active</span>';
+                } else {
+                    btn.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200";
+                    btn.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span>Inactive</span>';
+                }
+            }
+        });
+}
+</script>
+{% endblock %}

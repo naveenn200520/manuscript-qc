@@ -10,5 +10,8 @@ pyspellchecker
 python-docx
 lxml
 pdfplumber
-gunicorn 
+Pillow
+numpy
+xmltodict
+gunicorn
 waitress

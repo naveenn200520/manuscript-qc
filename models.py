@@ -177,6 +177,7 @@ class Manuscript(db.Model):
     applied_rules_count = db.Column(db.Integer, default=0)
     total_available_rules = db.Column(db.Integer, default=0)
     errors = db.relationship('ErrorRecord', backref='manuscript', lazy=True)
+    figures = db.relationship('FigureInspection', backref='manuscript', lazy=True, cascade='all, delete-orphan')
 
 # ─────────────────────────────────────────────
 # JOB SHEET
@@ -303,3 +304,170 @@ class AuditLog(db.Model):
     new_value = db.Column(db.Text, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', foreign_keys=[user_id], backref='audit_logs')
+
+# ─────────────────────────────────────────────
+# JOURNAL INSTRUCTION LIBRARY
+# ─────────────────────────────────────────────
+
+class JournalInstruction(db.Model):
+    """
+    Scalable Journal Instruction Library.
+    Supports thousands of journals and instructions with composite indexing
+    on (journal_number, active).
+    """
+    __tablename__ = 'journal_instructions'
+    id = db.Column(db.Integer, primary_key=True)
+    journal_number = db.Column(db.String(50), nullable=False, index=True)  # string to preserve leading zeros, e.g. "052", "520"
+    journal_name = db.Column(db.String(255), nullable=True)
+    category = db.Column(db.String(100), nullable=False, default='General')  # e.g. References, Affiliation, Title, Formatting
+    instruction_text = db.Column(db.Text, nullable=False)
+    type = db.Column(db.String(50), nullable=False, default='Reminder Only')  # 'Reminder Only' | 'Validation Rule'
+    priority = db.Column(db.String(20), nullable=False, default='Medium')  # 'High' | 'Medium' | 'Low'
+    active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    source = db.Column(db.String(100), nullable=True, default='Manual')  # 'XWiki' | 'Manual' | 'Import'
+    version = db.Column(db.String(50), nullable=True, default='1.0')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    __table_args__ = (
+        db.Index('idx_journal_active', 'journal_number', 'active'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'journalNumber': self.journal_number,
+            'journalName': self.journal_name or f"Journal {self.journal_number}",
+            'category': self.category or 'General',
+            'instructionText': self.instruction_text,
+            'type': self.type,
+            'priority': self.priority,
+            'active': self.active,
+            'source': self.source or 'Manual',
+            'version': self.version or '1.0',
+            'createdAt': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'updatedAt': self.updated_at.strftime('%Y-%m-%d %H:%M') if self.updated_at else ''
+        }
+
+
+# ─────────────────────────────────────────────
+# JOURNAL GUARD: IMAGE QUALITY CRITERIA & FIGURE INSPECTION
+# ─────────────────────────────────────────────
+
+class ImageCriterion(db.Model):
+    """
+    Journal Guard: Image Quality Criteria / Journal Artwork Specifications.
+    Supports CRUD operations for global defaults ('ALL') or journal-specific standards.
+    """
+    __tablename__ = 'image_criteria'
+    id = db.Column(db.Integer, primary_key=True)
+    journal_number = db.Column(db.String(50), nullable=False, default='ALL', index=True)
+    category = db.Column(db.String(100), nullable=False, default='Halftone / Photo') # Line Art | Halftone / Photo | Combination Art | Color Artwork
+    min_dpi = db.Column(db.Integer, nullable=False, default=300)
+    recommended_dpi = db.Column(db.Integer, nullable=False, default=300)
+    min_width_px = db.Column(db.Integer, nullable=False, default=800)
+    min_height_px = db.Column(db.Integer, nullable=False, default=600)
+    max_file_size_mb = db.Column(db.Float, nullable=False, default=50.0)
+    allowed_color_modes = db.Column(db.String(200), nullable=False, default='RGB, CMYK, Grayscale')
+    allowed_formats = db.Column(db.String(200), nullable=False, default='TIFF, EPS, PNG, JPEG, PDF')
+    min_sharpness_score = db.Column(db.Float, nullable=False, default=30.0)
+    notes = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'journal_number': self.journal_number,
+            'category': self.category,
+            'min_dpi': self.min_dpi,
+            'recommended_dpi': self.recommended_dpi,
+            'min_width_px': self.min_width_px,
+            'min_height_px': self.min_height_px,
+            'max_file_size_mb': self.max_file_size_mb,
+            'allowed_color_modes': self.allowed_color_modes,
+            'allowed_formats': self.allowed_formats,
+            'min_sharpness_score': self.min_sharpness_score,
+            'notes': self.notes or '',
+            'is_active': self.is_active,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M') if self.updated_at else ''
+        }
+
+
+class FigureInspection(db.Model):
+    """
+    Journal Guard: Inspected Figure Record for a Manuscript.
+    Stores DPI, resolution, dimensions, color mode, blur/sharpness metrics,
+    and verification issues.
+    """
+    __tablename__ = 'figure_inspections'
+    id = db.Column(db.Integer, primary_key=True)
+    manuscript_id = db.Column(db.Integer, db.ForeignKey('manuscripts.id'), nullable=False, index=True)
+    figure_label = db.Column(db.String(100), nullable=False, default='Figure') # e.g. "Figure 1", "Fig. 2"
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False) # static relative URL for web display
+    thumbnail_path = db.Column(db.String(500), nullable=True)
+    format = db.Column(db.String(50), nullable=True) # PNG, TIFF, JPEG, etc.
+    color_mode = db.Column(db.String(50), nullable=True) # RGB, CMYK, Grayscale, etc.
+    dpi_x = db.Column(db.Float, default=0.0)
+    dpi_y = db.Column(db.Float, default=0.0)
+    pixel_width = db.Column(db.Integer, default=0)
+    pixel_height = db.Column(db.Integer, default=0)
+    print_width_inches = db.Column(db.Float, default=0.0)
+    print_height_inches = db.Column(db.Float, default=0.0)
+    file_size_kb = db.Column(db.Float, default=0.0)
+    sharpness_score = db.Column(db.Float, default=0.0)
+    is_blurry = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String(30), default='PASS') # PASS | WARNING | FAIL | OVERRIDDEN
+    issues_json = db.Column(db.Text, default='[]') # JSON array of issues
+    is_cited_in_text = db.Column(db.Boolean, default=True)
+    override_reason = db.Column(db.Text, nullable=True)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+
+    @property
+    def issues(self):
+        try:
+            return json.loads(self.issues_json or '[]')
+        except Exception:
+            return []
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'manuscript_id': self.manuscript_id,
+            'figure_label': self.figure_label,
+            'original_filename': self.original_filename,
+            'file_path': self.file_path,
+            'thumbnail_path': self.thumbnail_path or self.file_path,
+            'format': self.format,
+            'color_mode': self.color_mode,
+            'dpi_x': round(self.dpi_x, 1),
+            'dpi_y': round(self.dpi_y, 1),
+            'effective_dpi': round(min(self.dpi_x, self.dpi_y) if (self.dpi_x > 0 and self.dpi_y > 0) else max(self.dpi_x, self.dpi_y), 1),
+            'pixel_width': self.pixel_width,
+            'pixel_height': self.pixel_height,
+            'print_width_inches': round(self.print_width_inches, 2),
+            'print_height_inches': round(self.print_height_inches, 2),
+            'file_size_kb': round(self.file_size_kb, 1),
+            'sharpness_score': round(self.sharpness_score, 1),
+            'is_blurry': self.is_blurry,
+            'status': self.status,
+            'issues': self.issues,
+            'is_cited_in_text': self.is_cited_in_text,
+            'override_reason': self.override_reason or '',
+            'reviewed_by_name': self.reviewer.name if self.reviewer else '',
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else ''
+        }
+

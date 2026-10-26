@@ -39,106 +39,436 @@
     }
 
     .fv-app {
+        position: fixed;
+        inset: 0;
         display: flex;
         flex-direction: column;
-        height: 100vh;
         background: var(--fv-bg);
         color: var(--fv-text);
         font-family: 'Inter', -apple-system, system-ui, sans-serif;
         overflow: hidden;
+        z-index: 0;
     }
 
-    /* ═══ TOOLBAR ═══ */
-    .fv-toolbar {
+    /* ═══ PROFESSIONAL HEADER ARCHITECTURE ═══ */
+    .fv-header-container {
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        background: #ffffff;
+        border-bottom: 1px solid var(--fv-border);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        z-index: 20;
+    }
+
+    /* ── Main Top Bar ── */
+    .fv-toolbar-main {
         display: flex;
         align-items: center;
         justify-content: space-between;
         height: 52px;
-        padding: 0 24px;
-        background: var(--fv-surface);
-        border-bottom: 1px solid var(--fv-border);
-        flex-shrink: 0;
-        z-index: 20;
+        padding: 0 20px;
+        background: #ffffff;
+        gap: 16px;
     }
 
     .fv-toolbar-left {
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 12px;
+        min-width: 0;
+        flex-shrink: 1;
+    }
+
+    .fv-back-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px !important;
+        min-height: 32px !important;
+        border-radius: 8px;
+        color: #64748b;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        text-decoration: none;
+        transition: all 0.15s ease;
+        flex-shrink: 0;
+    }
+    .fv-back-btn:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+        border-color: #cbd5e1;
+    }
+    .fv-back-btn svg {
+        width: 16px;
+        height: 16px;
     }
 
     .fv-brand {
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--fv-text);
-        letter-spacing: -0.02em;
         display: flex;
         align-items: center;
         gap: 8px;
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+        text-decoration: none;
+        flex-shrink: 0;
     }
-
-    .fv-brand span {
-        color: var(--fv-info);
-        font-weight: 400;
+    .fv-brand-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        border-radius: 6px;
+        color: white;
+    }
+    .fv-brand-icon svg {
+        width: 14px;
+        height: 14px;
+    }
+    .fv-brand b {
+        color: #2563eb;
     }
 
     .fv-toolbar-divider {
         width: 1px;
-        height: 24px;
-        background: var(--fv-border);
+        height: 22px;
+        background: #e2e8f0;
+        flex-shrink: 0;
     }
 
-    .fv-filename {
+    .fv-project-badge {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 13px;
-        color: var(--fv-text-secondary);
-        font-weight: 500;
+        min-width: 0;
     }
-
-    .fv-filename svg {
+    .fv-doc-icon {
         width: 16px;
         height: 16px;
-        color: var(--fv-text-muted);
+        color: #64748b;
+        flex-shrink: 0;
+    }
+    .fv-project-name {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .fv-journal-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .fv-team-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 7px;
+        background: #f8fafc;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
+    /* ── Mode Switcher (Integrated into Sub-Bar) ── */
+    .fv-mode-switch {
+        display: inline-flex;
+        background: #ffffff;
+        border-radius: 6px;
+        padding: 2px;
+        border: 1px solid #cbd5e1;
+        flex-shrink: 0;
+    }
+    .fv-mode-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 10px !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        border: none !important;
+        border-radius: 4px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #64748b;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .fv-mode-btn svg {
+        width: 13px;
+        height: 13px;
+    }
+    .fv-mode-btn.active {
+        background: #2563eb !important;
+        color: #ffffff !important;
+        box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    }
+    .fv-mode-btn:not(.active):hover {
+        color: #1e293b;
+        background: #f1f5f9 !important;
+    }
+
+    .fv-sub-divider {
+        width: 1px;
+        height: 16px;
+        background: #cbd5e1;
+        flex-shrink: 0;
+        margin: 0 4px;
+    }
+
+    /* ── Top Bar Right Actions ── */
     .fv-toolbar-right {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
+        flex-shrink: 0;
     }
-
-    .fv-toolbar-stats {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        margin-right: 12px;
-    }
-
-    .fv-stat-chip {
-        display: flex;
+    .fv-header-btn {
+        display: inline-flex;
         align-items: center;
         gap: 6px;
+        padding: 0 12px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        border-radius: 7px;
         font-size: 12px;
         font-weight: 600;
-        padding: 4px 10px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #334155;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .fv-header-btn:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+        color: #0f172a;
+    }
+    .fv-header-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+    .fv-btn-journal {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+    .fv-btn-journal:hover {
+        background: #dbeafe;
+        border-color: #93c5fd;
+        color: #1e40af;
+    }
+    .fv-btn-primary {
+        background: #2563eb !important;
+        border-color: #2563eb !important;
+        color: #ffffff !important;
+        box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    }
+    .fv-btn-primary:hover {
+        background: #1d4ed8 !important;
+        border-color: #1d4ed8 !important;
+    }
+    .fv-btn-secondary {
+        background: #f8fafc;
+        border-color: #e2e8f0;
+        color: #64748b;
+    }
+    .fv-btn-secondary:hover {
+        background: #f1f5f9;
+        color: #334155;
+    }
+    .fv-btn-success {
+        background: #16a34a !important;
+        border-color: #16a34a !important;
+        color: #ffffff !important;
+    }
+    .fv-btn-success:hover {
+        background: #15803d !important;
+    }
+    .fv-btn-blocked {
+        opacity: 0.55;
+        cursor: not-allowed !important;
+    }
+
+    /* ── QC Checks Secondary Ribbon ── */
+    .fv-toolbar-sub {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 40px;
+        padding: 0 16px;
+        background: #f8fafc;
+        border-top: 1px solid #f1f5f9;
+        gap: 12px;
+    }
+
+    .fv-sub-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .fv-sub-left::-webkit-scrollbar {
+        display: none;
+    }
+
+    @media (max-width: 950px) {
+        .fv-panel-counts {
+            display: none !important;
+        }
+        .fv-team-chip {
+            display: none !important;
+        }
+        .fv-sub-title {
+            display: none !important;
+        }
+    }
+    .fv-sub-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #64748b;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .fv-chips-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+    .fv-qc-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 9px;
         border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 500;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+    }
+    .fv-qc-chip b {
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .fv-qc-chip.has-errors {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: #991b1b;
+    }
+    .fv-qc-chip.has-errors b {
+        color: #dc2626;
+    }
+    .fv-qc-chip.is-zero {
+        background: #ffffff;
+        border-color: #e2e8f0;
+        color: #64748b;
+    }
+    .fv-qc-chip.is-zero b {
+        color: #64748b;
+    }
+    .fv-qc-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #94a3b8;
+        flex-shrink: 0;
+    }
+    .fv-qc-chip.has-errors .fv-qc-dot {
+        background: #dc2626;
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+    }
+    .fv-qc-chip.fv-qc-done {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+    .fv-qc-chip.fv-qc-done b {
+        color: #15803d;
+    }
+    .fv-qc-dot.done {
+        background: #16a34a;
     }
 
-    .fv-stat-chip.error {
-        color: var(--fv-error);
-        background: var(--fv-error-bg);
+    .fv-clean-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #065f46;
+        white-space: nowrap;
     }
 
-    .fv-stat-chip.warning {
-        color: var(--fv-warning);
-        background: var(--fv-warning-bg);
+    .fv-sub-right {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-shrink: 0;
     }
 
-    .fv-stat-chip.info {
-        color: var(--fv-info);
-        background: var(--fv-info-bg);
+    .fv-progress-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .fv-progress-bar {
+        width: 100px;
+        height: 6px;
+        background: #e2e8f0;
+        border-radius: 9999px;
+        overflow: hidden;
+    }
+    .fv-progress-fill {
+        height: 100%;
+        background: #10b981;
+        border-radius: 9999px;
+        transition: width 0.3s ease;
+    }
+    .fv-progress-text {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #334155;
+        min-width: 28px;
     }
 
     .fv-stat-chip.success {
@@ -222,19 +552,21 @@
     .fv-main {
         display: flex;
         flex-direction: column;
-        flex: 1;
+        flex: 1 1 0;
+        min-height: 0;
         overflow: hidden;
     }
 
     /* ═══ EDITOR AREA ═══ */
     .fv-editor-wrap {
-        flex: 1;
+        flex: 1 1 0;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         overflow: hidden;
         background: var(--fv-surface);
         border-bottom: 1px solid var(--fv-border);
-        min-height: 200px;
+        min-height: 180px;
+        min-width: 0;
     }
 
     .fv-editor-tab-bar {
@@ -273,7 +605,8 @@
     }
 
     .fv-editor-scroll {
-        flex: 1;
+        flex: 1 1 0;
+        min-height: 0;
         overflow-y: auto;
         overflow-x: auto;
         font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
@@ -434,9 +767,9 @@
     .fv-panel {
         display: flex;
         flex-direction: column;
-        height: 280px;
+        height: 220px;
         min-height: 120px;
-        max-height: 60vh;
+        max-height: 50vh;
         background: var(--fv-surface);
         flex-shrink: 0;
         overflow: hidden;
@@ -1114,144 +1447,406 @@
         gap: 8px;
         justify-content: flex-end;
     }
+
+    @keyframes modalPop {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes drawerSlideIn {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+    }
+
+    .drawer-type-pill {
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .drawer-type-pill:hover {
+        background: #e2e8f0;
+        color: #1e293b;
+    }
+
+    .drawer-type-pill.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: white;
+    }
+
+    /* ════ JOURNAL INSTRUCTIONS MODAL REDESIGN ════ */
+    .journal-instructions-dialog {
+        background: #ffffff;
+        border-radius: 14px;
+        width: 680px;
+        max-width: min(94vw, 680px);
+        max-height: min(88vh, 640px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.08);
+        border-top: 3.5px solid #2563eb;
+        animation: modalPop 0.2s ease-out;
+    }
+
+    #journalReminderHeader {
+        padding: 14px 22px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #ffffff;
+        flex-shrink: 0;
+    }
+
+    #journalReminderBody {
+        padding: 22px 26px;
+        overflow-y: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
+    }
+
+    #journalReminderBody::-webkit-scrollbar {
+        width: 6px;
+    }
+    #journalReminderBody::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    #journalReminderBody::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
+    #journalReminderFooter {
+        padding: 12px 24px;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    /* Section formatting inside modal */
+    .ji-section-block {
+        margin-bottom: 22px;
+    }
+    .ji-section-block:last-child {
+        margin-bottom: 4px;
+    }
+
+    .ji-section-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0 0 10px 0;
+        padding-bottom: 6px;
+        border-bottom: 1.5px solid #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        letter-spacing: -0.01em;
+    }
+
+    .ji-section-indicator {
+        width: 4px;
+        height: 15px;
+        background: #2563eb;
+        border-radius: 2px;
+        flex-shrink: 0;
+    }
+
+    .ji-paragraph {
+        font-size: 16px;
+        line-height: 1.65;
+        color: #334155;
+        margin: 0 0 12px 0;
+        font-weight: 400;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .ji-paragraph:last-child {
+        margin-bottom: 0;
+    }
+
+    .ji-query-box {
+        margin-top: 8px;
+        padding: 10px 14px;
+        background: #eff6ff;
+        border-left: 3px solid #3b82f6;
+        border-radius: 6px;
+        font-size: 15px;
+        line-height: 1.55;
+        color: #1e40af;
+        font-style: normal;
+    }
+
+    .ji-highlight {
+        font-weight: 600;
+        color: #0f172a;
+        background: #f1f5f9;
+        padding: 1px 5px;
+        border-radius: 4px;
+    }
+
+    /* Small Screen and Short Viewport Responsiveness */
+    @media (max-height: 680px) {
+        .journal-instructions-dialog {
+            max-height: 94vh !important;
+        }
+        #journalReminderHeader {
+            padding: 10px 18px !important;
+        }
+        #journalReminderBody {
+            padding: 16px 20px !important;
+        }
+        #journalReminderFooter {
+            padding: 10px 18px !important;
+        }
+        .ji-section-block {
+            margin-bottom: 16px !important;
+        }
+        .ji-paragraph {
+            font-size: 15px !important;
+            line-height: 1.55 !important;
+            margin-bottom: 10px !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .journal-instructions-dialog {
+            width: 96vw !important;
+            max-width: 96vw !important;
+            border-radius: 10px !important;
+        }
+        #journalReminderHeader {
+            padding: 12px 16px !important;
+        }
+        #journalReminderBody {
+            padding: 16px 18px !important;
+        }
+        #journalReminderFooter {
+            padding: 12px 16px !important;
+        }
+        .ji-paragraph {
+            font-size: 15px !important;
+        }
+    }
 </style>
 
 <div class="fv-app">
     <!-- ═══ CRITICAL ERROR BLOCKING BANNER ═══ -->
-    {% if critical_blocked %}
-    <div class="fv-critical-banner">
+    <div class="fv-critical-banner" id="criticalBanner" style="display: {{ 'flex' if (critical_blocked and unapproved_critical_count > 0) else 'none' }};">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round"
                 d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
         </svg>
         <span>Export Report, Final Submit, and Mark Done are blocked.</span>
         <span class="fv-cb-count">{{ unapproved_critical_count }}</span>
-        <span>unresolved critical error(s) must be restored, corrected, or explicitly approved by an authorized
-            reviewer.</span>
+        <span>unresolved critical error(s) must be restored, corrected, or skipped before exporting.</span>
     </div>
-    {% endif %}
 
-    <!-- ═══ TOOLBAR ═══ -->
-    <header class="fv-toolbar">
-        <div class="fv-toolbar-left">
-            <a href="{{ url_for('dashboard') }}" class="fv-brand" style="text-decoration:none">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                    stroke="currentColor" style="width:18px;height:18px;color:var(--fv-info)">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                </svg>
-                Journal<span>Guard</span>
-            </a>
+    <!-- ═══ PROFESSIONAL HEADER ARCHITECTURE ═══ -->
+    <header class="fv-header-container">
+        <!-- Main Top Bar -->
+        <div class="fv-toolbar-main">
+            <!-- Left: Back Button, Brand, Project & Journal -->
+            <div class="fv-toolbar-left">
+                <a href="{{ url_for('dashboard') }}" class="fv-back-btn" title="Back to Projects">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                    </svg>
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="fv-brand" style="text-decoration:none">
+                    <span class="fv-brand-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path fill-rule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516l-.143.001c-2.996 0-5.717-1.17-7.734-3.08zm3.094 8.016a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
+                        </svg>
+                    </span>
+                    <span>Journal<b>Guard</b></span>
+                </a>
 
-            <div class="fv-toolbar-divider"></div>
+                <div class="fv-toolbar-divider"></div>
 
-            <div class="fv-filename">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                        d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-                {{ project.name }} · {{ project.team.name }}
+                <div class="fv-project-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="fv-doc-icon">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                    <span class="fv-project-name" title="{{ project.name }}">{{ project.name }}</span>
+                    {% if journal_number and journal_number != 'Unknown' %}
+                    <span class="fv-journal-chip" title="Journal Number">Journal {{ journal_number }}</span>
+                    {% endif %}
+                    {% if project.team %}
+                    <span class="fv-team-chip" title="Team">{{ project.team.name }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right: Actions -->
+            <div class="fv-toolbar-right">
+                {% if project.job_sheet_id %}
+                <button type="button" class="fv-header-btn" onclick="document.getElementById('jobSheetPanel').style.display='flex'">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                    </svg>
+                    Job Sheet
+                </button>
+                {% endif %}
+
+                <button type="button" class="fv-header-btn fv-btn-journal" id="btnJournalInstructions" onclick="openJournalModalManual()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                    Journal Instructions
+                </button>
+
+                <button type="button" class="fv-header-btn" id="btnFiguresQC" onclick="openFiguresModal()" style="background: #f0fdfa; border-color: #99f6e4; color: #0f766e; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" style="width:14px;height:14px">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span>Figure Guard</span>
+                    <span style="background:#0d9488; color:#fff; font-size:10px; padding:0 6px; border-radius:999px; font-weight:700;">{{ figures|length }}</span>
+                </button>
+
+                <!-- Finalize & Skip All Buttons -->
+                <div id="finalizeActionArea" style="display:inline-flex; align-items:center;">
+                    <form id="finalizeForm" action="{{ url_for('finalize_project', project_id=project.id) }}" method="POST" style="display: {{ 'inline' if (progress == 100 or open_errors|length == 0) and not (critical_blocked and unapproved_critical_count > 0) else 'none' }};">
+                        <button type="submit" id="btnFinalize" class="fv-header-btn fv-btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                            Finalize
+                        </button>
+                    </form>
+                    <form id="skipAllForm" action="{{ url_for('skip_all_errors', project_id=project.id) }}" method="POST" style="display: {{ 'none' if (progress == 100 or open_errors|length == 0) and not (critical_blocked and unapproved_critical_count > 0) else 'inline' }};" onsubmit="return handleSkipAllSubmit(event)">
+                        <button type="submit" id="btnSkipAll" class="fv-header-btn fv-btn-secondary">Skip All</button>
+                    </form>
+                </div>
+
+                <!-- Export Report Dropdown -->
+                <div class="fv-dropdown" id="exportDropdown">
+                    <button type="button" id="btnExportReport" class="fv-header-btn fv-btn-primary {{ 'fv-btn-blocked' if (critical_blocked and unapproved_critical_count > 0) else '' }}"
+                        onclick="handleExportButtonClick(event)"
+                        {% if critical_blocked and unapproved_critical_count > 0 %}title="Blocked: unresolved critical errors"{% endif %}>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        <span>Export Report</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:11px;height:11px;margin-left:1px">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </button>
+                    <div class="fv-dropdown-menu">
+                        <a href="{{ url_for('download_project', project_id=project.id, fmt='txt') }}" class="fv-dropdown-item">
+                            <span class="fv-dropdown-icon">📄</span>
+                            <div>
+                                <div style="font-weight:600">Plain Text</div>
+                                <div class="fv-dropdown-label">.txt format</div>
+                            </div>
+                        </a>
+                        <a href="{{ url_for('download_project', project_id=project.id, fmt='docx') }}" class="fv-dropdown-item">
+                            <span class="fv-dropdown-icon">📝</span>
+                            <div>
+                                <div style="font-weight:600">Word Document</div>
+                                <div class="fv-dropdown-label">.docx format</div>
+                            </div>
+                        </a>
+                        <a href="{{ url_for('download_project', project_id=project.id, fmt='xml') }}" class="fv-dropdown-item">
+                            <span class="fv-dropdown-icon">🗂️</span>
+                            <div>
+                                <div style="font-weight:600">XML</div>
+                                <div class="fv-dropdown-label">.xml format</div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="fv-toolbar-right">
-            <div
-                style="display: flex; background: #e2e8f0; border-radius: 6px; padding: 2px; margin-right: 12px; font-size: 12px; font-weight: 600;">
-                <button id="btnReviewMode" class="fv-btn"
-                    style="border: none; background: white; color: var(--fv-text); padding: 4px 12px; height: 28px !important; min-height: 28px !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
-                    onclick="setCompareMode(false)">Review Mode</button>
-                <button id="btnCompareMode" class="fv-btn"
-                    style="border: none; background: transparent; color: var(--fv-text-secondary); padding: 4px 12px; height: 28px !important; min-height: 28px !important; box-shadow: none;"
-                    onclick="setCompareMode(true)">Compare Mode</button>
-            </div>
-            <div class="fv-toolbar-stats" id="toolbarStatsContainer">
-                <div id="headerNoErrors" class="fv-stat-chip success" style="{% if critical_count > 0 %}display:none;{% else %}display:flex;{% endif %}align-items:center;gap:6px;font-weight:600;padding:5px 12px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:6px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:15px;height:15px;color:#059669;">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    <span>5 mandatory checks completed — no Critical errors found.</span>
+        <!-- Sub-Bar: Dedicated Mode Switcher & QC Checks Ribbon -->
+        <div class="fv-toolbar-sub">
+            <div class="fv-sub-left">
+                <!-- Mode Switcher -->
+                <div class="fv-mode-switch">
+                    <button id="btnReviewMode" class="fv-mode-btn active" onclick="setCompareMode(false)">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                        </svg>
+                        Review
+                    </button>
+                    <button id="btnCompareMode" class="fv-mode-btn" onclick="setCompareMode(true)">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                        </svg>
+                        Compare
+                    </button>
                 </div>
-                <div id="headerGroupChips" style="{% if critical_count == 0 %}display:none;{% else %}display:flex;{% endif %}align-items:center;gap:6px;flex-wrap:wrap;">
-                    <span class="fv-stat-chip error" title="Article Title"><span class="fv-stat-dot error"></span>Title: <b id="statTitle" style="margin-left:3px">{{ rule_group_counts.article_title }}</b></span>
-                    <span class="fv-stat-chip error" title="Author Name(s)"><span class="fv-stat-dot error"></span>Authors: <b id="statAuthors" style="margin-left:3px">{{ rule_group_counts.author_name }}</b></span>
-                    <span class="fv-stat-chip error" title="Affiliation(s)"><span class="fv-stat-dot error"></span>Affiliations: <b id="statAffiliations" style="margin-left:3px">{{ rule_group_counts.affiliation }}</b></span>
-                    <span class="fv-stat-chip error" title="Corresponding Author Name"><span class="fv-stat-dot error"></span>Corresponding: <b id="statCorresponding" style="margin-left:3px">{{ rule_group_counts.corresponding_author_name }}</b></span>
-                    <span class="fv-stat-chip error" title="References"><span class="fv-stat-dot error"></span>References: <b id="statReferences" style="margin-left:3px">{{ rule_group_counts.references }}</b></span>
-                    <span class="fv-stat-chip success"><span class="fv-stat-dot success"></span>Done: <b id="statResolved" style="margin-left:3px">{{ resolved_errors }}</b></span>
+
+                <div class="fv-sub-divider"></div>
+
+                <span class="fv-sub-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;color:#64748b;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                    Checks:
+                </span>
+
+                <div class="fv-toolbar-stats" id="toolbarStatsContainer" style="margin:0;">
+                    <div id="headerNoErrors" class="fv-clean-badge" style="{% if critical_count > 0 %}display:none;{% else %}display:inline-flex;{% endif %}">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                        </svg>
+                        <span>5 mandatory checks completed — 0 critical issues</span>
+                    </div>
+
+                    <div id="headerGroupChips" class="fv-chips-row" style="{% if critical_count == 0 %}display:none;{% else %}display:flex;{% endif %}">
+                        <span class="fv-qc-chip {{ 'has-errors' if rule_group_counts.article_title > 0 else 'is-zero' }}" data-group="article_title" title="Article Title">
+                            <span class="fv-qc-dot"></span>Title: <b id="statTitle">{{ rule_group_counts.article_title }}</b>
+                        </span>
+                        <span class="fv-qc-chip {{ 'has-errors' if rule_group_counts.author_name > 0 else 'is-zero' }}" data-group="author_name" title="Author Name(s)">
+                            <span class="fv-qc-dot"></span>Authors: <b id="statAuthors">{{ rule_group_counts.author_name }}</b>
+                        </span>
+                        <span class="fv-qc-chip {{ 'has-errors' if rule_group_counts.affiliation > 0 else 'is-zero' }}" data-group="affiliation" title="Affiliation(s)">
+                            <span class="fv-qc-dot"></span>Affiliations: <b id="statAffiliations">{{ rule_group_counts.affiliation }}</b>
+                        </span>
+                        <span class="fv-qc-chip {{ 'has-errors' if rule_group_counts.corresponding_author_name > 0 else 'is-zero' }}" data-group="corresponding_author_name" title="Corresponding Author Name">
+                            <span class="fv-qc-dot"></span>Corresponding: <b id="statCorresponding">{{ rule_group_counts.corresponding_author_name }}</b>
+                        </span>
+                        <span class="fv-qc-chip {{ 'has-errors' if rule_group_counts.references > 0 else 'is-zero' }}" data-group="references" title="References">
+                            <span class="fv-qc-dot"></span>References: <b id="statReferences">{{ rule_group_counts.references }}</b>
+                        </span>
+                        <span class="fv-qc-chip {{ 'has-errors' if (figures_summary.fail > 0 or figures_summary.warning > 0) else 'is-zero' }}" onclick="openFiguresModal()" style="cursor:pointer;" title="Artwork & Figure Quality (Click to Inspect)">
+                            <span class="fv-qc-dot" style="background:#0d9488"></span>Figures: <b id="statFigures">{{ figures_summary.total }}</b>
+                            {% if figures_summary.fail > 0 %}
+                                <span style="background:#fee2e2; color:#b91c1c; font-size:10px; font-weight:700; padding:1px 5px; border-radius:999px; margin-left:3px;">{{ figures_summary.fail }} Low DPI</span>
+                            {% elif figures_summary.warning > 0 %}
+                                <span style="background:#fef3c7; color:#b45309; font-size:10px; font-weight:700; padding:1px 5px; border-radius:999px; margin-left:3px;">{{ figures_summary.warning }} Warn</span>
+                            {% elif figures_summary.total > 0 %}
+                                <span style="background:#d1fae5; color:#047857; font-size:10px; font-weight:700; padding:1px 5px; border-radius:999px; margin-left:3px;">Passed</span>
+                            {% endif %}
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <div class="fv-progress-wrap">
-                <div class="fv-progress-bar">
-                    <div class="fv-progress-fill" id="progressFill" style="width:{{ progress }}%"></div>
-                </div>
-                <span class="fv-progress-text" id="progressText">{{ progress }}%</span>
-            </div>
+            <div class="fv-sub-right">
+                <span class="fv-qc-chip fv-qc-done" title="Resolved Issues">
+                    <span class="fv-qc-dot done"></span>Done: <b id="statResolved">{{ resolved_errors }}</b>
+                </span>
 
-            {% if progress == 100 %}
-            <form action="{{ url_for('finalize_project', project_id=project.id) }}" method="POST"
-                style="display:inline">
-                <button type="submit" class="fv-btn fv-btn-success {{ 'fv-btn-blocked' if critical_blocked }}"
-                    {{ 'title=Blocked: unresolved critical errors' if critical_blocked }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                        stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    Finalize
-                </button>
-            </form>
-            {% else %}
-            <form action="{{ url_for('skip_all_errors', project_id=project.id) }}" method="POST" style="display:inline"
-                onsubmit="return confirm('Skip all remaining errors?')">
-                <button type="submit" class="fv-btn">Skip All</button>
-            </form>
-            {% endif %}
-
-            {% if project.job_sheet_id %}
-            <button class="fv-btn" onclick="document.getElementById('jobSheetPanel').style.display='flex'">Job
-                Sheet</button>
-            {% endif %}
-
-            <div class="fv-dropdown" id="exportDropdown">
-                <button class="fv-btn fv-btn-primary {{ 'fv-btn-blocked' if critical_blocked }}"
-                    onclick="{% if critical_blocked %}event.preventDefault();alert('Export blocked: unresolved critical errors must be resolved or approved first.'){% else %}toggleExport(event){% endif %}"
-                    {{ 'title=Blocked: unresolved critical errors' if critical_blocked }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                        stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    Export Report
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5"
-                        stroke="currentColor" style="width:11px;height:11px;margin-left:2px">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                    </svg>
-                </button>
-                <div class="fv-dropdown-menu">
-                    <a href="{{ url_for('download_project', project_id=project.id, fmt='txt') }}"
-                        class="fv-dropdown-item">
-                        <span class="fv-dropdown-icon">📄</span>
-                        <div>
-                            <div style="font-weight:600">Plain Text</div>
-                            <div class="fv-dropdown-label">.txt format</div>
-                        </div>
-                    </a>
-                    <a href="{{ url_for('download_project', project_id=project.id, fmt='docx') }}"
-                        class="fv-dropdown-item">
-                        <span class="fv-dropdown-icon">📝</span>
-                        <div>
-                            <div style="font-weight:600">Word Document</div>
-                            <div class="fv-dropdown-label">.docx format</div>
-                        </div>
-                    </a>
-                    <a href="{{ url_for('download_project', project_id=project.id, fmt='xml') }}"
-                        class="fv-dropdown-item">
-                        <span class="fv-dropdown-icon">🗂️</span>
-                        <div>
-                            <div style="font-weight:600">XML</div>
-                            <div class="fv-dropdown-label">.xml format</div>
-                        </div>
-                    </a>
+                <div class="fv-progress-wrap">
+                    <div class="fv-progress-bar">
+                        <div class="fv-progress-fill" id="progressFill" style="width:{{ progress }}%"></div>
+                    </div>
+                    <span class="fv-progress-text" id="progressText">{{ progress }}%</span>
                 </div>
             </div>
         </div>
@@ -1260,7 +1855,7 @@
     <!-- ═══ MAIN ═══ -->
     <div class="fv-main">
         <!-- Editor -->
-        <div class="fv-editor-wrap" id="editorWrap" style="flex-direction: row; display: flex;">
+        <div class="fv-editor-wrap" id="editorWrap">
 
             <!-- Original Manuscript Pane (Hidden by Default) -->
             <div id="originalEditorPane"
@@ -1281,7 +1876,7 @@
             </div>
 
             <!-- Edited Manuscript Pane -->
-            <div id="editedEditorPane" style="flex: 1; display: flex; flex-direction: column;">
+            <div id="editedEditorPane" style="flex: 1 1 0; min-height: 0; min-width: 0; display: flex; flex-direction: column;">
                 <div class="fv-editor-tab-bar">
                     <div class="fv-editor-tab active">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -1321,6 +1916,7 @@
                     <button class="fv-filter-btn" data-f="affiliation" onclick="applyFilter('affiliation',this)">Affiliation(s) (<span id="filterCountAffil">{{ rule_group_counts.affiliation }}</span>)</button>
                     <button class="fv-filter-btn" data-f="corresponding_author_name" onclick="applyFilter('corresponding_author_name',this)">Corresponding Author Name (<span id="filterCountCorr">{{ rule_group_counts.corresponding_author_name }}</span>)</button>
                     <button class="fv-filter-btn" data-f="references" onclick="applyFilter('references',this)">References (<span id="filterCountRef">{{ rule_group_counts.references }}</span>)</button>
+                    <button class="fv-filter-btn" data-f="figures" onclick="openFiguresModal()" style="border-color:#99f6e4;color:#0f766e;font-weight:600">Figures (<span id="filterCountFigures">{{ figures|length }}</span>)</button>
                     <button class="fv-filter-btn" data-f="OPEN" onclick="applyFilter('OPEN',this)">Open Only</button>
                 </div>
             </div>
@@ -1428,11 +2024,7 @@
 </div>
 
 <script>
-    (function () {
-        'use strict';
-
-        const manuscriptText = {{ manuscript.working_text | tojson
-    }};
+    const manuscriptText = {{ manuscript.working_text | tojson }};
     const originalText = {{ manuscript.original_text | default ('') | tojson }};
     const lines = manuscriptText.split('\n');
     const origLines = originalText.split('\n');
@@ -1482,20 +2074,12 @@
         const origPane = document.getElementById('originalEditorPane');
 
         if (mode) {
-            btnC.style.background = 'white';
-            btnC.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-            btnC.style.color = 'var(--fv-text)';
-            btnR.style.background = 'transparent';
-            btnR.style.boxShadow = 'none';
-            btnR.style.color = 'var(--fv-text-secondary)';
+            btnC.classList.add('active');
+            btnR.classList.remove('active');
             if (origPane) origPane.style.display = 'flex';
         } else {
-            btnR.style.background = 'white';
-            btnR.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-            btnR.style.color = 'var(--fv-text)';
-            btnC.style.background = 'transparent';
-            btnC.style.boxShadow = 'none';
-            btnC.style.color = 'var(--fv-text-secondary)';
+            btnR.classList.add('active');
+            btnC.classList.remove('active');
             if (origPane) origPane.style.display = 'none';
         }
         applyHighlights();
@@ -1690,14 +2274,6 @@
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     Reviewed
                 </button>`;
-            // Add Approve Critical button for critical errors (admin/team_leader only)
-            if (isCritical) {
-                btns += `
-                <button class="fv-action-btn fv-action-approve" onclick="showApproveModal(${selectedEid})">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
-                    Approve Critical
-                </button>`;
-            }
             actEl.innerHTML = suggestedHtml + btns;
         } else {
             actEl.innerHTML = suggestedHtml + `<span class="fv-status-tag ${status}" style="text-align:center;padding:10px;font-size:13px;width:100%">${status}</span>`;
@@ -1788,18 +2364,58 @@
         const panelCounts = document.getElementById('panelCounts');
         const jsEmptyRow = document.getElementById('jsEmptyRow');
 
+        // UNLOCK / BLOCK CONTROLS
+        const banner = document.getElementById('criticalBanner') || document.querySelector('.fv-critical-banner');
+        const expBtn = document.getElementById('btnExportReport');
+        const finForm = document.getElementById('finalizeForm');
+        const skipForm = document.getElementById('skipAllForm');
+
         if (open === 0) {
-            if (headerNoErrors) headerNoErrors.style.display = 'flex';
+            // ALL ERRORS ARE RESOLVED OR SKIPPED -> UNLOCKED!
+            if (banner) banner.style.display = 'none';
+            if (expBtn) {
+                expBtn.classList.remove('fv-btn-blocked');
+                expBtn.removeAttribute('title');
+            }
+            if (finForm) finForm.style.display = 'inline';
+            if (skipForm) skipForm.style.display = 'none';
+
+            if (headerNoErrors) headerNoErrors.style.display = 'inline-flex';
             if (headerGroupChips) headerGroupChips.style.display = 'none';
             if (panelCounts) panelCounts.textContent = '5 mandatory checks completed — no Critical errors found.';
             if (jsEmptyRow) jsEmptyRow.style.display = '';
         } else {
+            // STILL HAS OPEN ERRORS -> BLOCKED
+            if (banner) {
+                banner.style.display = 'flex';
+                const countEl = banner.querySelector('.fv-cb-count');
+                if (countEl) countEl.textContent = open;
+            }
+            if (expBtn) {
+                expBtn.classList.add('fv-btn-blocked');
+                expBtn.setAttribute('title', 'Blocked: ' + open + ' unresolved critical errors');
+            }
+            if (finForm) finForm.style.display = 'none';
+            if (skipForm) skipForm.style.display = 'inline';
+
             if (headerNoErrors) headerNoErrors.style.display = 'none';
             if (headerGroupChips) headerGroupChips.style.display = 'flex';
             if (panelCounts) {
                 panelCounts.innerHTML = `Article Title: <b>${titleOpen}</b> | Author Name(s): <b>${authorsOpen}</b> | Affiliation(s): <b>${affilOpen}</b> | Corresponding Author Name: <b>${corrOpen}</b> | References: <b>${refOpen}</b>`;
             }
             if (jsEmptyRow) jsEmptyRow.style.display = 'none';
+
+            // Update chip classes for responsive indicators
+            const chipTitle = document.querySelector('.fv-qc-chip[data-group="article_title"]');
+            if (chipTitle) chipTitle.className = 'fv-qc-chip ' + (titleOpen > 0 ? 'has-errors' : 'is-zero');
+            const chipAuthors = document.querySelector('.fv-qc-chip[data-group="author_name"]');
+            if (chipAuthors) chipAuthors.className = 'fv-qc-chip ' + (authorsOpen > 0 ? 'has-errors' : 'is-zero');
+            const chipAffil = document.querySelector('.fv-qc-chip[data-group="affiliation"]');
+            if (chipAffil) chipAffil.className = 'fv-qc-chip ' + (affilOpen > 0 ? 'has-errors' : 'is-zero');
+            const chipCorr = document.querySelector('.fv-qc-chip[data-group="corresponding_author_name"]');
+            if (chipCorr) chipCorr.className = 'fv-qc-chip ' + (corrOpen > 0 ? 'has-errors' : 'is-zero');
+            const chipRef = document.querySelector('.fv-qc-chip[data-group="references"]');
+            if (chipRef) chipRef.className = 'fv-qc-chip ' + (refOpen > 0 ? 'has-errors' : 'is-zero');
         }
 
         const total = rows.length;
@@ -1849,12 +2465,16 @@
     document.addEventListener('mousemove', (e) => {
         if (!isResizing) return;
         const appRect = document.querySelector('.fv-app').getBoundingClientRect();
-        const toolbarH = 52;
+        const bannerEl = document.querySelector('.fv-critical-banner');
+        const bannerH = bannerEl ? bannerEl.offsetHeight : 0;
+        const headerEl = document.querySelector('.fv-header-container');
+        const toolbarH = headerEl ? headerEl.offsetHeight : (document.querySelector('.fv-toolbar') ? document.querySelector('.fv-toolbar').offsetHeight : 90);
         const handleH = 6;
         const minPanel = 120;
-        const minEditor = 200;
-        const y = e.clientY - appRect.top - toolbarH;
-        const available = appRect.height - toolbarH - handleH;
+        const minEditor = 180;
+        const fixedH = bannerH + toolbarH + handleH;
+        const y = e.clientY - appRect.top - bannerH - toolbarH;
+        const available = appRect.height - fixedH;
         const panelH = available - y;
         if (panelH >= minPanel && y >= minEditor) {
             panel.style.height = panelH + 'px';
@@ -1873,17 +2493,75 @@
     const firstOpen = document.querySelector('.fv-err-row:not(.fv-row-resolved)');
     if (firstOpen) setTimeout(() => selectRow(firstOpen), 250);
 
-}) ();
-
-    // ─── EXPORT DROPDOWN ───
+    // ─── EXPORT DROPDOWN & EXPORT ACTION ───
     window.toggleExport = function (e) {
-        e.stopPropagation();
-        document.getElementById('exportDropdown').classList.toggle('open');
+        if (e) e.stopPropagation();
+        const dd = document.getElementById('exportDropdown');
+        if (dd) dd.classList.toggle('open');
     };
+
+    window.handleExportButtonClick = function (e) {
+        if (e) e.stopPropagation();
+        const expBtn = document.getElementById('btnExportReport');
+        if (expBtn && expBtn.classList.contains('fv-btn-blocked')) {
+            alert('Export Report is blocked because unresolved critical errors remain. Please restore, keep, dismiss, or skip all errors to unlock.');
+            return;
+        }
+        window.toggleExport(e);
+    };
+
+    // ─── INSTANT SKIP ALL (AJAX UNLOCK) ───
+    window.handleSkipAllSubmit = function (e) {
+        if (e) e.preventDefault();
+        const form = document.getElementById('skipAllForm');
+        const url = form ? form.action : `/projects/${projectId}/skip_all`;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        })
+        .then(r => r.json())
+        .then(data => {
+            const rows = document.querySelectorAll('.fv-err-row');
+            rows.forEach(r => {
+                if (r.dataset.status === 'OPEN') {
+                    r.dataset.status = 'IGNORED';
+                    r.classList.add('fv-row-resolved');
+                    const tag = r.querySelector('[data-status-tag]');
+                    if (tag) {
+                        tag.className = 'fv-status-tag IGNORED';
+                        tag.textContent = 'IGNORED';
+                    }
+                }
+            });
+            const drawerActions = document.getElementById('drawerActions');
+            if (drawerActions) {
+                drawerActions.innerHTML = '<span class="fv-status-tag IGNORED" style="text-align:center;padding:10px;font-size:13px;width:100%">IGNORED</span>';
+            }
+            applyHighlights();
+            updateStats();
+        })
+        .catch(err => {
+            console.warn('AJAX skip_all fallback to form submit:', err);
+            if (form) form.submit();
+        });
+        return false;
+    };
+
     document.addEventListener('click', () => {
         const dd = document.getElementById('exportDropdown');
         if (dd) dd.classList.remove('open');
     });
+
+    // Ensure stats & unlocking are synchronized immediately
+    document.addEventListener('DOMContentLoaded', () => {
+        updateStats();
+    });
+    setTimeout(updateStats, 100);
     // ─── APPROVE CRITICAL MODAL ───
     window.showApproveModal = function (eid) {
         const modal = document.getElementById('approveModal');
@@ -1923,6 +2601,382 @@
             })
             .catch(e => console.error('Approve error:', e));
     };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // JOURNAL INSTRUCTIONS: POPUP & RIGHT-SIDE DRAWER
+    // ═══════════════════════════════════════════════════════════════════════
+    window.escapeHtml = escapeHtml;
+
+    let journalDataCache = null;
+    let drawerTypeFilter = 'ALL';
+
+    function loadJournalInstructions(autoShowPopup = false) {
+        const projectId = {{ project.id }};
+
+        fetch(`/api/projects/${projectId}/journal-instructions`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data || !data.success) return;
+                journalDataCache = data;
+
+                // Update modal & drawer headers with journalNumber
+                const numBadges = document.querySelectorAll('#modalJournalNumberBadge, #drawerJournalNumBadge');
+                numBadges.forEach(b => b.textContent = 'Journal ' + data.journalNumber);
+
+                // Update subtitle without overwriting modal title
+                const subEl = document.getElementById('modalJournalNameSub');
+                if (subEl) {
+                    if (data.journalName && !data.journalName.toLowerCase().startsWith('journal ')) {
+                        subEl.textContent = '• ' + data.journalName;
+                        subEl.title = data.journalName;
+                    } else {
+                        subEl.textContent = '';
+                    }
+                }
+
+                const drawerNameEl = document.getElementById('drawerJournalNameHeading');
+                if (drawerNameEl) {
+                    drawerNameEl.textContent = data.journalName || ('Journal ' + data.journalNumber);
+                }
+
+                // Render formatted instruction sections
+                renderReminderBullets(data.reminders || [], data.allInstructions || []);
+
+                // Auto-show popup if active reminders exist
+                const sessionKey = 'journal_reminder_dismissed_proj_' + projectId + '_j_' + data.journalNumber;
+                if (autoShowPopup && !sessionStorage.getItem(sessionKey)) {
+                    if ((data.reminders && data.reminders.length > 0) || (data.allInstructions && data.allInstructions.length > 0)) {
+                        showJournalReminderModal();
+                    }
+                }
+            })
+            .catch(err => console.error('Failed to load journal instructions:', err));
+    }
+
+    function renderReminderBullets(reminders, allInstructions) {
+        const container = document.getElementById('journalReminderBullets');
+        const emptyEl = document.getElementById('journalReminderEmpty');
+        if (!container) return;
+
+        const sourceList = (reminders && reminders.length > 0) ? reminders : (allInstructions || []);
+
+        if (sourceList.length === 0) {
+            container.innerHTML = '';
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+        }
+
+        if (emptyEl) emptyEl.style.display = 'none';
+
+        // Extract and parse instructions into item objects
+        const rawItems = [];
+        sourceList.forEach(r => {
+            const fullText = (r.instructionText || '').trim();
+            if (!fullText) return;
+
+            // Check if fullText has "Line 1", "Line 2", etc.
+            if (/Line\s+\d+/i.test(fullText)) {
+                const parts = fullText.split(/(?=Line\s+\d+\s*[-–—:])/i);
+                parts.forEach(p => {
+                    const trimmed = p.trim();
+                    if (trimmed) {
+                        rawItems.push({
+                            category: r.category,
+                            priority: r.priority,
+                            text: trimmed
+                        });
+                    }
+                });
+            } else if (fullText.includes('\n\n')) {
+                fullText.split(/\n\s*\n/).forEach(p => {
+                    const trimmed = p.trim();
+                    if (trimmed) {
+                        rawItems.push({
+                            category: r.category,
+                            priority: r.priority,
+                            text: trimmed
+                        });
+                    }
+                });
+            } else {
+                rawItems.push({
+                    category: r.category,
+                    priority: r.priority,
+                    text: fullText
+                });
+            }
+        });
+
+        // Map items to clear section headings:
+        // "References", "Letter to the Editor", "Abstract", "Publisher's Note", etc.
+        const sections = {};
+        function getSectionName(item) {
+            const t = item.text.toLowerCase();
+            const c = (item.category || '').toLowerCase();
+
+            // 1. Publisher's Note (check before reference to avoid false match on "below the references")
+            if (t.includes('publisher’s note') || t.includes("publisher's note") || t.includes('publishers note') || t.includes('springer nature remains neutral') || c.includes('publisher')) {
+                return "Publisher's Note";
+            }
+            // 2. Abstract (check before Letter to the Editor to avoid false match on "Letters to the Editor... do not require an abstract")
+            if (t.includes('nonstructured abstract') || t.includes('structured abstract') || t.includes('abstract:') || (t.includes('abstract') && !t.includes('to the editor, use the format')) || c.includes('abstract')) {
+                return 'Abstract';
+            }
+            // 3. References (check for "in references", "et al.", or reference rules)
+            if (t.includes('in references') || t.includes('et al') || c.includes('reference') || (t.includes('reference') && !t.includes('below the references'))) {
+                return 'References';
+            }
+            // 4. Letter to the Editor (format "To the Editor", typeset page limits)
+            if (t.includes('letter to the editor') || t.includes('to the editor') || c.includes('letter')) {
+                return 'Letter to the Editor';
+            }
+            // 5. Deviations & Confirmation
+            if (t.includes('deviation') || t.includes('confirmation from the pe') || (t.includes('job sheet') && t.includes('pe')) || c.includes('deviation')) {
+                return 'Deviations & Editorial Confirmation';
+            }
+            // 6. Conflict of interest / Author query
+            if (t.includes('conflict of interest') || t.includes('coi') || t.includes('author query') || c.includes('coi') || c.includes('query')) {
+                return 'Author Queries & Conflict of Interest';
+            }
+            if (item.category && item.category !== 'General') {
+                return item.category;
+            }
+            return 'General Instructions';
+        }
+
+        rawItems.forEach(item => {
+            const sec = getSectionName(item);
+            if (!sections[sec]) sections[sec] = [];
+            sections[sec].push(item);
+        });
+
+        const preferredOrder = [
+            'References',
+            'Letter to the Editor',
+            'Abstract',
+            "Publisher's Note",
+            'Deviations & Editorial Confirmation',
+            'Author Queries & Conflict of Interest',
+            'General Instructions'
+        ];
+
+        const sortedSecNames = Object.keys(sections).sort((a, b) => {
+            const iA = preferredOrder.indexOf(a);
+            const iB = preferredOrder.indexOf(b);
+            if (iA !== -1 && iB !== -1) return iA - iB;
+            if (iA !== -1) return -1;
+            if (iB !== -1) return 1;
+            return a.localeCompare(b);
+        });
+
+        let html = '';
+        sortedSecNames.forEach(secTitle => {
+            const secItems = sections[secTitle];
+
+            html += `
+            <div class="ji-section-block">
+                <h3 class="ji-section-title">
+                    <span class="ji-section-indicator"></span>
+                    <span>${escapeHtml(secTitle)}</span>
+                </h3>
+                <div class="ji-section-body">
+            `;
+
+            secItems.forEach(it => {
+                // Strip redundant leading "Line \d+ [-–—:]"
+                let cleanText = it.text.replace(/^Line\s+\d+\s*[-–—:]\s*/i, '').trim();
+
+                // Format text with readable 16px body text & comfortable line height
+                let safeText = escapeHtml(cleanText);
+
+                // Highlight key phrases and special author query blocks
+                safeText = safeText
+                    .replace(/&quot;et al\.?&quot;/gi, '<span class="ji-highlight">"et al."</span>')
+                    .replace(/&quot;To the Editor&quot;/gi, '<span class="ji-highlight">"To the Editor"</span>')
+                    .replace(/&quot;Publisher&#39;s Note Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations&quot;/gi, '<span class="ji-highlight">&ldquo;Publisher&#39;s Note Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations&rdquo;</span>')
+                    .replace(/Publisher&#39;s Note Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations/gi, '<span class="ji-highlight">&ldquo;Publisher&#39;s Note Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations&rdquo;</span>')
+                    .replace(/(Author query:\s*[^<]+)/gi, '<div class="ji-query-box"><strong>Author query:</strong> $1</div>')
+                    .replace(/Author query:\s*<div class="ji-query-box"><strong>Author query:<\/strong>/gi, '<div class="ji-query-box"><strong>Author query:</strong>');
+
+                html += `<p class="ji-paragraph">${safeText}</p>`;
+            });
+
+            html += `
+                </div>
+            </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function showJournalReminderModal() {
+        const overlay = document.getElementById('journalReminderOverlay');
+        if (overlay) {
+            overlay.style.setProperty('display', 'flex', 'important');
+            overlay.style.visibility = 'visible';
+            overlay.style.opacity = '1';
+        }
+    }
+
+    function closeJournalReminderModal() {
+        const overlay = document.getElementById('journalReminderOverlay');
+        if (overlay) {
+            overlay.style.setProperty('display', 'none', 'important');
+        }
+        const projectId = {{ project.id }};
+        const jNum = (journalDataCache && journalDataCache.journalNumber) ? journalDataCache.journalNumber : 'unknown';
+        const sessionKey = 'journal_reminder_dismissed_proj_' + projectId + '_j_' + jNum;
+        sessionStorage.setItem(sessionKey, '1');
+    }
+
+    function handleReminderOverlayClick(e) {
+        if (e.target.id === 'journalReminderOverlay') {
+            closeJournalReminderModal();
+        }
+    }
+
+    function openJournalModalManual() {
+        if (!journalDataCache) {
+            loadJournalInstructions(false);
+        }
+        showJournalReminderModal();
+    }
+
+    function openJournalDrawerFromModal() {
+        closeJournalReminderModal();
+        openJournalDrawer();
+    }
+
+    window.escapeHtml = escapeHtml;
+    window.loadJournalInstructions = loadJournalInstructions;
+    window.showJournalReminderModal = showJournalReminderModal;
+    window.closeJournalReminderModal = closeJournalReminderModal;
+    window.openJournalModalManual = openJournalModalManual;
+    window.openJournalDrawer = openJournalDrawer;
+    window.closeJournalDrawer = closeJournalDrawer;
+    window.openJournalDrawerFromModal = openJournalDrawerFromModal;
+    window.handleReminderOverlayClick = handleReminderOverlayClick;
+    window.handleDrawerOverlayClick = handleDrawerOverlayClick;
+    window.setDrawerTypeFilter = setDrawerTypeFilter;
+
+    function openJournalDrawer() {
+        if (!journalDataCache) {
+            loadJournalInstructions(false);
+        }
+        const drawer = document.getElementById('journalDrawerOverlay');
+        if (drawer) drawer.style.display = 'block';
+        renderFilteredDrawerInstructions();
+    }
+
+    function closeJournalDrawer() {
+        const drawer = document.getElementById('journalDrawerOverlay');
+        if (drawer) drawer.style.display = 'none';
+    }
+
+    function handleDrawerOverlayClick(e) {
+        if (e.target.id === 'journalDrawerOverlay') {
+            closeJournalDrawer();
+        }
+    }
+
+    function setDrawerTypeFilter(type, btn) {
+        drawerTypeFilter = type;
+        document.querySelectorAll('.drawer-type-pill').forEach(p => p.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        renderFilteredDrawerInstructions();
+    }
+
+    function renderFilteredDrawerInstructions() {
+        const container = document.getElementById('drawerBody');
+        if (!container || !journalDataCache) return;
+
+        const query = (document.getElementById('drawerSearchInput').value || '').toLowerCase().trim();
+        const all = journalDataCache.allInstructions || [];
+
+        const filtered = all.filter(i => {
+            const matchesType = (drawerTypeFilter === 'ALL') || (i.type === drawerTypeFilter);
+            const matchesQuery = !query ||
+                (i.instructionText && i.instructionText.toLowerCase().includes(query)) ||
+                (i.category && i.category.toLowerCase().includes(query));
+            return matchesType && matchesQuery;
+        });
+
+        document.getElementById('drawerCountText').textContent = `${filtered.length} instruction(s) for Journal ${journalDataCache.journalNumber}`;
+
+        if (filtered.length === 0) {
+            container.innerHTML = `
+            <div style="padding:40px 20px;text-align:center;color:#64748b;">
+                <p style="font-weight:600;font-size:14px;margin:0 0 4px;color:#334155;">No instructions match your search</p>
+                <p style="font-size:12px;margin:0;">Try clearing the search or changing the filter.</p>
+            </div>
+            `;
+            return;
+        }
+
+        const grouped = {};
+        filtered.forEach(i => {
+            const cat = i.category || 'General';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(i);
+        });
+
+        let html = '';
+        for (const [catName, items] of Object.entries(grouped)) {
+            html += `
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:12px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(catName)}</span>
+                    <span style="font-size:10px;font-weight:700;color:#64748b;background:#e2e8f0;padding:1px 6px;border-radius:10px;">${items.length}</span>
+                </div>
+                <div style="padding:10px;display:flex;flex-direction:column;gap:8px;">
+            `;
+
+            items.forEach(inst => {
+                let priBadge = '';
+                if (inst.priority === 'High') {
+                    priBadge = '<span style="font-size:10px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:1px 5px;border-radius:4px;">HIGH</span>';
+                } else if (inst.priority === 'Medium') {
+                    priBadge = '<span style="font-size:10px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:1px 5px;border-radius:4px;">MED</span>';
+                } else {
+                    priBadge = '<span style="font-size:10px;font-weight:700;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;padding:1px 5px;border-radius:4px;">LOW</span>';
+                }
+
+                let typeBadge = '';
+                if (inst.type === 'Reminder Only') {
+                    typeBadge = '<span style="font-size:10px;font-weight:600;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;padding:1px 5px;border-radius:4px;">Reminder</span>';
+                } else {
+                    typeBadge = '<span style="font-size:10px;font-weight:600;color:#6b21a8;background:#faf5ff;border:1px solid #e9d5ff;padding:1px 5px;border-radius:4px;">Validation Rule</span>';
+                }
+
+                const srcVer = inst.source ? `<span style="font-size:10px;color:#94a3b8;margin-left:auto;">${escapeHtml(inst.source)}${inst.version ? ' · v' + escapeHtml(inst.version) : ''}</span>` : '';
+
+                html += `
+                <div style="padding:10px 12px;background:#ffffff;border:1px solid #f1f5f9;border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                        ${priBadge}
+                        ${typeBadge}
+                        ${srcVer}
+                    </div>
+                    <div style="font-size:12px;color:#1e293b;line-height:1.5;">${escapeHtml(inst.instructionText)}</div>
+                </div>
+                `;
+            });
+
+            html += `
+                </div>
+            </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => loadJournalInstructions(true));
+    } else {
+        loadJournalInstructions(true);
+    }
 </script>
 
 <!-- Approve Critical Modal -->
@@ -2006,4 +3060,631 @@
         </div>
     </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- JOURNAL INSTRUCTIONS REMINDER MODAL (QC REVIEW POPUP) -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="journalReminderOverlay" class="journal-instructions-modal-overlay"
+    style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 500; align-items: center; justify-content: center; padding: 16px;"
+    onclick="handleReminderOverlayClick(event)">
+    <div id="journalReminderCard" class="journal-instructions-dialog">
+        
+        <!-- Compact Header -->
+        <div id="journalReminderHeader">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #dbeafe;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" style="width: 18px; height: 18px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                </div>
+                <div style="display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0;">
+                    <h2 style="margin: 0; font-size: 17px; font-weight: 700; color: #0f172a; line-height: 1.25; white-space: nowrap;">
+                        Journal instructions
+                    </h2>
+                    <span id="modalJournalNumberBadge" style="font-family: monospace; font-size: 11px; font-weight: 700; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; padding: 2px 7px; border-radius: 4px; white-space: nowrap;">
+                        Journal {{ journal_number }}
+                    </span>
+                    <span id="modalJournalNameSub" style="font-size: 12px; color: #64748b; font-weight: 500; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                </div>
+            </div>
+            <button type="button" onclick="closeJournalReminderModal()"
+                style="width: 30px; height: 30px; border-radius: 6px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease;"
+                onmouseover="this.style.background='#e2e8f0';this.style.color='#0f172a';"
+                onmouseout="this.style.background='#f8fafc';this.style.color='#64748b';"
+                title="Close" aria-label="Close modal">&times;</button>
+        </div>
+
+        <!-- Scrollable Body -->
+        <div id="journalReminderBody">
+            <!-- Formatted Sectional Instructions -->
+            <div id="journalReminderBullets">
+                <!-- Dynamically populated with 16px body text and clear section headings -->
+            </div>
+
+            <!-- Empty state if no reminders -->
+            <div id="journalReminderEmpty" style="display: none; padding: 32px 20px; text-align: center; background: #f8fafc; border-radius: 10px; border: 1px dashed #cbd5e1;">
+                <p style="margin: 0; font-size: 14px; color: #64748b;">No active instructions configured for Journal {{ journal_number }}.</p>
+            </div>
+        </div>
+
+        <!-- Fixed Footer -->
+        <div id="journalReminderFooter">
+            <button type="button" onclick="openJournalDrawerFromModal()"
+                style="background: transparent; border: 1px solid #cbd5e1; color: #2563eb; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease;"
+                onmouseover="this.style.borderColor='#93c5fd';this.style.background='#eff6ff';"
+                onmouseout="this.style.borderColor='#cbd5e1';this.style.background='transparent';">
+                <span>View all instructions</span>
+                <span style="font-size: 14px;">&rarr;</span>
+            </button>
+            <button type="button" onclick="closeJournalReminderModal()"
+                style="background: #2563eb; color: #ffffff; border: none; font-weight: 600; font-size: 13px; padding: 7px 20px; border-radius: 6px; cursor: pointer; box-shadow: 0 1px 2px rgba(37,99,235,0.2); transition: background 0.15s ease;"
+                onmouseover="this.style.background='#1d4ed8';"
+                onmouseout="this.style.background='#2563eb';">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- JOURNAL INSTRUCTIONS RIGHT-SIDE DRAWER (FULL INSTRUCTIONS) -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="journalDrawerOverlay"
+    style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(1px); z-index: 280;"
+    onclick="handleDrawerOverlayClick(event)">
+    <div id="journalDrawerPanel"
+        style="position: fixed; right: 0; top: 0; bottom: 0; width: 500px; max-width: 92vw; background: white; box-shadow: -10px 0 35px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; z-index: 290; animation: drawerSlideIn 0.25s ease-out;">
+        
+        <!-- Drawer Header -->
+        <div style="padding: 18px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="drawerJournalNumBadge" style="font-family: monospace; font-size: 11px; font-weight: 700; background: #e2e8f0; color: #334155; padding: 2px 7px; border-radius: 4px;">
+                        Journal {{ journal_number }}
+                    </span>
+                    <span style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase;">Library</span>
+                </div>
+                <h3 id="drawerJournalNameHeading" style="margin: 3px 0 0; font-size: 16px; font-weight: 700; color: #0f172a;">
+                    All Journal Instructions
+                </h3>
+            </div>
+            <button type="button" onclick="closeJournalDrawer()"
+                style="background: transparent; border: none; font-size: 24px; line-height: 1; cursor: pointer; color: #94a3b8; padding: 4px;"
+                title="Close">&times;</button>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; background: white; display: flex; flex-direction: column; gap: 8px;">
+            <div style="position: relative;">
+                <input type="text" id="drawerSearchInput" placeholder="Search instructions or category..."
+                    oninput="renderFilteredDrawerInstructions()"
+                    style="width: 100%; padding: 7px 12px 7px 32px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+                    style="width: 14px; height: 14px; color: #94a3b8; position: absolute; left: 10px; top: 9px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+            </div>
+
+            <!-- Filter pills -->
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                <span style="font-size: 11px; color: #64748b; font-weight: 500;">Type:</span>
+                <button type="button" class="drawer-type-pill active" data-type="ALL" onclick="setDrawerTypeFilter('ALL', this)">All</button>
+                <button type="button" class="drawer-type-pill" data-type="Reminder Only" onclick="setDrawerTypeFilter('Reminder Only', this)">Reminders</button>
+                <button type="button" class="drawer-type-pill" data-type="Validation Rule" onclick="setDrawerTypeFilter('Validation Rule', this)">Validation Rules</button>
+            </div>
+        </div>
+
+        <!-- Drawer Body: Grouped by category -->
+        <div id="drawerBody" style="padding: 16px; overflow-y: auto; flex: 1; background: #f8fafc; display: flex; flex-direction: column; gap: 14px;">
+            <!-- Grouped category sections inserted here -->
+        </div>
+
+        <!-- Drawer Footer -->
+        <div style="padding: 10px 16px; border-top: 1px solid #e2e8f0; background: white; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b;">
+            <span id="drawerCountText">0 instructions</span>
+            <button type="button" onclick="closeJournalDrawer()"
+                style="background: #f1f5f9; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; color: #334155;">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- FIGURE GUARD MODAL & ARTWORK QUALITY INSPECTION SYSTEM -->
+<div id="figureGuardModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden transition-all duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        
+        <!-- Modal Header -->
+        <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400 font-bold text-lg shadow-inner">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-lg font-bold text-white tracking-tight">Figure Guard &mdash; Artwork Quality Inspector</h3>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-400/20 text-teal-300 border border-teal-400/30">Journal Guard AI Engine</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Automated DPI calculation, OpenCV edge blur detection, color mode verification, and citation cross-referencing.</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="document.getElementById('figUploadInput').click()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition-colors">
+                    <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>Upload Figure</span>
+                </button>
+                <input type="file" id="figUploadInput" class="hidden" accept="image/*,.tif,.tiff,.eps,.pdf,.zip" onchange="uploadFigureFile(this)">
+                <button type="button" onclick="recheckAllFigures()" id="btnRecheckFigures" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span>Re-inspect Figures</span>
+                </button>
+                <button type="button" onclick="closeFigureGuardModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Metric KPI Cards Bar -->
+        <div class="px-6 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0 grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm" id="kpiTotalFigures">0</div>
+                <div><div class="text-xs font-semibold text-slate-700">Total Figures</div><div class="text-[10px] text-slate-400">Manuscript & Pack</div></div>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-emerald-100 shadow-sm flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-sm flex items-center justify-center" id="kpiPassedFigures">0</div>
+                <div><div class="text-xs font-semibold text-emerald-800">Passed</div><div class="text-[10px] text-emerald-600">Meets Criteria</div></div>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-amber-100 shadow-sm flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 font-bold text-sm flex items-center justify-center" id="kpiWarningFigures">0</div>
+                <div><div class="text-xs font-semibold text-amber-800">Warnings</div><div class="text-[10px] text-amber-600">Sub-optimal specs</div></div>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-red-100 shadow-sm flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-red-50 text-red-700 font-bold text-sm flex items-center justify-center" id="kpiFailedFigures">0</div>
+                <div><div class="text-xs font-semibold text-red-800">Failed</div><div class="text-[10px] text-red-600">Quality Blockers</div></div>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-sky-100 shadow-sm flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 font-bold text-sm flex items-center justify-center" id="kpiBlurFigures">0</div>
+                <div><div class="text-xs font-semibold text-sky-800">Blur Detected</div><div class="text-[10px] text-sky-600">Laplacian Score</div></div>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-purple-100 shadow-sm flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 font-bold text-sm flex items-center justify-center" id="kpiOverriddenFigures">0</div>
+                <div><div class="text-xs font-semibold text-purple-800">Overridden</div><div class="text-[10px] text-purple-600">Editor Approved</div></div>
+            </div>
+        </div>
+
+        <!-- Filter Sub-bar -->
+        <div class="px-6 py-2.5 bg-white border-b border-slate-200 flex-shrink-0 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-1.5" id="figFilterContainer">
+                <button type="button" onclick="filterFigures('ALL', this)" class="fig-tab-btn active px-3 py-1 rounded-md font-medium text-slate-700 bg-slate-100 border border-slate-300">All (<span id="tabCountAll">0</span>)</button>
+                <button type="button" onclick="filterFigures('ISSUES', this)" class="fig-tab-btn px-3 py-1 rounded-md font-medium text-slate-600 hover:bg-slate-50 border border-transparent">Has Issues (<span id="tabCountIssues">0</span>)</button>
+                <button type="button" onclick="filterFigures('BLUR', this)" class="fig-tab-btn px-3 py-1 rounded-md font-medium text-slate-600 hover:bg-slate-50 border border-transparent">Blurry Only (<span id="tabCountBlur">0</span>)</button>
+                <button type="button" onclick="filterFigures('LOW_DPI', this)" class="fig-tab-btn px-3 py-1 rounded-md font-medium text-slate-600 hover:bg-slate-50 border border-transparent">Low DPI (<span id="tabCountDpi">0</span>)</button>
+                <button type="button" onclick="filterFigures('UNCITED', this)" class="fig-tab-btn px-3 py-1 rounded-md font-medium text-slate-600 hover:bg-slate-50 border border-transparent">Uncited (<span id="tabCountUncited">0</span>)</button>
+            </div>
+            <div class="text-slate-400 text-[11px] flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-teal-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                <span>DPI thresholds and sharpness scores calibrated for academic peer review</span>
+            </div>
+        </div>
+
+        <!-- Modal Body: Figures Cards Grid / Empty State -->
+        <div class="p-6 overflow-y-auto flex-1 bg-slate-50/60" id="figuresListContainer">
+            <div class="text-center py-16" id="figuresLoadingSpinner">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-teal-500 border-t-transparent"></div>
+                <p class="mt-3 text-xs font-semibold text-slate-500">Inspecting manuscript figures & artwork...</p>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-3 bg-white border-t border-slate-200 flex-shrink-0 flex items-center justify-between text-xs text-slate-500">
+            <div class="flex items-center gap-4">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 300+ DPI (Print Ready)</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> 150-299 DPI (Web Acceptable)</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> &lt;150 DPI or Blurry (Quality Defect)</span>
+            </div>
+            <button type="button" onclick="closeFigureGuardModal()" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors">Close</button>
+        </div>
+
+    </div>
+</div>
+
+<!-- FIGURE OVERRIDE MODAL -->
+<div id="figureOverrideModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden transition-all duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in-95">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+                <h4 class="text-base font-bold text-slate-800">Override Quality Warning</h4>
+                <p class="text-xs text-slate-500" id="overrideFigLabel">Figure 1</p>
+            </div>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-900">
+            <span class="font-semibold">Audit Trail Notice:</span> All figure overrides are permanently recorded in the project inspection log with your user stamp and justification.
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Justification Reason <span class="text-red-500">*</span></label>
+            <textarea id="overrideReasonInput" rows="3" placeholder="e.g. Author provided legacy historical archival photo; higher resolution unavailable. Quality acceptable for web appendix." class="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeFigureOverrideModal()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-semibold">Cancel</button>
+            <button type="button" onclick="submitFigureOverride()" id="btnSubmitOverride" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-sm">Confirm Override</button>
+        </div>
+    </div>
+</div>
+
+<!-- FIGURE ZOOM PREVIEW MODAL -->
+<div id="figureZoomModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+    <div class="relative max-w-5xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden border border-slate-700 flex flex-col shadow-2xl">
+        <div class="px-4 py-2.5 bg-slate-950 text-white flex items-center justify-between text-xs border-b border-slate-800">
+            <span class="font-semibold text-slate-200" id="zoomFigTitle">Figure Preview</span>
+            <div class="flex items-center gap-3">
+                <a id="zoomDownloadBtn" href="#" download class="text-teal-400 hover:text-teal-300 underline text-xs">Download Raw</a>
+                <button type="button" onclick="closeFigureZoomModal()" class="text-slate-400 hover:text-white">&times; Close</button>
+            </div>
+        </div>
+        <div class="p-4 flex items-center justify-center overflow-auto max-h-[82vh] bg-slate-950/50">
+            <img id="zoomFigImg" src="" alt="Enlarged Figure" class="max-w-full max-h-[78vh] object-contain rounded-lg border border-slate-800 shadow-md">
+        </div>
+    </div>
+</div>
+
+<script>
+/* Journal Guard - Figure Inspection Controller */
+let currentFigures = [];
+let currentFigFilter = 'ALL';
+let activeOverrideFigureId = null;
+const manuscriptId = {{ manuscript.id }};
+
+function openFigureGuardModal() {
+    const modal = document.getElementById('figureGuardModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    loadFiguresData();
+}
+
+function openFiguresModal() {
+    openFigureGuardModal();
+}
+window.openFiguresModal = openFigureGuardModal;
+
+function closeFigureGuardModal() {
+    const modal = document.getElementById('figureGuardModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function loadFiguresData() {
+    const container = document.getElementById('figuresListContainer');
+    const spinner = document.getElementById('figuresLoadingSpinner');
+    if (spinner) spinner.classList.remove('hidden');
+
+    fetch(`/api/manuscripts/${manuscriptId}/figures`)
+        .then(res => res.json())
+        .then(data => {
+            currentFigures = data.figures || [];
+            updateKpiCounters(data.summary || {});
+            renderFiguresList();
+        })
+        .catch(err => {
+            console.error('Error fetching figures:', err);
+            container.innerHTML = `<div class="text-center py-12 text-red-500 text-xs">Failed to load figure inspection data: ${err.message}</div>`;
+        });
+}
+
+function updateKpiCounters(sum) {
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+    setVal('kpiTotalFigures', sum.total || 0);
+    setVal('kpiPassedFigures', sum.passed || 0);
+    setVal('kpiWarningFigures', sum.warnings || 0);
+    setVal('kpiFailedFigures', sum.failed || 0);
+    setVal('kpiBlurFigures', sum.blurry_count || 0);
+    setVal('kpiOverriddenFigures', sum.overridden || 0);
+
+    setVal('tabCountAll', sum.total || 0);
+    setVal('tabCountIssues', (sum.warnings || 0) + (sum.failed || 0));
+    setVal('tabCountBlur', sum.blurry_count || 0);
+    setVal('tabCountDpi', sum.low_dpi_count || 0);
+    setVal('tabCountUncited', sum.uncited_count || 0);
+
+    const figCountBadge = document.getElementById('figuresCountBadge');
+    if (figCountBadge) {
+        figCountBadge.textContent = `${sum.total || 0} Figures`;
+    }
+}
+
+function filterFigures(filterType, btnEl) {
+    currentFigFilter = filterType;
+    document.querySelectorAll('#figFilterContainer .fig-tab-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-slate-100', 'border-slate-300', 'text-slate-700');
+        btn.classList.add('border-transparent', 'text-slate-600');
+    });
+    if (btnEl) {
+        btnEl.classList.add('active', 'bg-slate-100', 'border-slate-300', 'text-slate-700');
+        btnEl.classList.remove('border-transparent');
+    }
+    renderFiguresList();
+}
+
+function renderFiguresList() {
+    const container = document.getElementById('figuresListContainer');
+    if (!container) return;
+
+    let filtered = currentFigures;
+    if (currentFigFilter === 'ISSUES') {
+        filtered = currentFigures.filter(f => f.status === 'WARNING' || f.status === 'FAIL');
+    } else if (currentFigFilter === 'BLUR') {
+        filtered = currentFigures.filter(f => f.is_blurry);
+    } else if (currentFigFilter === 'LOW_DPI') {
+        filtered = currentFigures.filter(f => f.dpi_x < 300 || (f.issues && f.issues.some(i => i.field === 'dpi')));
+    } else if (currentFigFilter === 'UNCITED') {
+        filtered = currentFigures.filter(f => f.issues && f.issues.some(i => i.field === 'citation'));
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300 p-8">
+                <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+                <h4 class="text-sm font-bold text-slate-700">No Figures Found</h4>
+                <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1">No artwork matching the active filter criteria. Upload images or inspect manuscript archive.</p>
+                <button type="button" onclick="document.getElementById('figUploadInput').click()" class="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-semibold shadow-sm">
+                    + Upload New Figure
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    let cardsHtml = '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">';
+    filtered.forEach(fig => {
+        let statusBadge = '';
+        if (fig.status === 'PASS') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">PASS</span>';
+        } else if (fig.status === 'WARNING') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">WARNING</span>';
+        } else if (fig.status === 'FAIL') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">FAILED</span>';
+        } else if (fig.status === 'OVERRIDDEN') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">OVERRIDDEN</span>';
+        }
+
+        const blurBadge = fig.is_blurry ?
+            `<span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">Blurry (Score: ${fig.sharpness_score})</span>` :
+            `<span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Sharp (${fig.sharpness_score})</span>`;
+
+        const dpiColor = (fig.dpi_x >= 300) ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : (fig.dpi_x >= 150 ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200');
+
+        let issuesHtml = '';
+        if (fig.issues && fig.issues.length > 0) {
+            issuesHtml = '<div class="mt-3 pt-2.5 border-t border-slate-100 space-y-1">';
+            fig.issues.forEach(iss => {
+                const isCrit = iss.severity === 'CRITICAL' || iss.severity === 'ERROR';
+                const iconColor = isCrit ? 'text-red-500' : 'text-amber-500';
+                issuesHtml += `
+                    <div class="flex items-start gap-1.5 text-[11px] ${isCrit ? 'text-red-800' : 'text-amber-800'}">
+                        <svg class="w-3.5 h-3.5 ${iconColor} flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                        <span><strong>${(iss.field || 'Spec').toUpperCase()}:</strong> ${iss.message}</span>
+                    </div>
+                `;
+            });
+            issuesHtml += '</div>';
+        }
+
+        let overrideInfo = '';
+        if (fig.status === 'OVERRIDDEN') {
+            overrideInfo = `
+                <div class="mt-2 p-2 rounded-lg bg-purple-50 border border-purple-200 text-[11px] text-purple-900">
+                    <div class="font-semibold">Approved by ${fig.reviewed_by || 'Editor'}:</div>
+                    <div class="italic">"${fig.override_reason || 'Manual override recorded'}"</div>
+                </div>
+            `;
+        }
+
+        const thumbSrc = fig.thumbnail_url || fig.file_url || '';
+
+        cardsHtml += `
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow transition-shadow p-4 flex flex-col justify-between">
+                <div>
+                    <!-- Top Bar -->
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 text-sm">${fig.figure_label || 'Figure'}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">${fig.format || 'IMG'} &bull; ${fig.file_size_kb} KB</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            ${statusBadge}
+                        </div>
+                    </div>
+
+                    <!-- Main Grid: Thumb & Specs -->
+                    <div class="flex gap-4 items-start">
+                        <!-- Thumbnail Preview -->
+                        <div class="relative group w-32 h-32 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0 cursor-pointer flex items-center justify-center" onclick="openFigureZoom('${fig.file_url || thumbSrc}', '${fig.figure_label}')">
+                            ${thumbSrc ? `<img src="${thumbSrc}" alt="${fig.figure_label}" class="w-full h-full object-contain p-1">` : `<div class="text-slate-400 text-xs font-mono">No Preview</div>`}
+                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[11px] font-semibold transition-opacity">
+                                Zoom
+                            </div>
+                        </div>
+
+                        <!-- Technical Specs -->
+                        <div class="flex-1 text-xs space-y-1.5">
+                            <div class="flex justify-between items-center py-0.5 border-b border-slate-50">
+                                <span class="text-slate-500 text-[11px]">Dimensions:</span>
+                                <span class="font-semibold text-slate-700 font-mono text-[11px]">${fig.pixel_width} &times; ${fig.pixel_height} px</span>
+                            </div>
+                            <div class="flex justify-between items-center py-0.5 border-b border-slate-50">
+                                <span class="text-slate-500 text-[11px]">Resolution:</span>
+                                <span class="font-semibold px-1.5 py-0.5 rounded text-[10px] border ${dpiColor}">${fig.dpi_x} &times; ${fig.dpi_y} DPI</span>
+                            </div>
+                            <div class="flex justify-between items-center py-0.5 border-b border-slate-50">
+                                <span class="text-slate-500 text-[11px]">Print Width:</span>
+                                <span class="font-medium text-slate-600 text-[11px]">${fig.print_width_inches}" &times; ${fig.print_height_inches}"</span>
+                            </div>
+                            <div class="flex justify-between items-center py-0.5 border-b border-slate-50">
+                                <span class="text-slate-500 text-[11px]">Color Mode:</span>
+                                <span class="font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px]">${fig.color_mode || 'RGB'}</span>
+                            </div>
+                            <div class="flex justify-between items-center py-0.5">
+                                <span class="text-slate-500 text-[11px]">Clarity / Blur:</span>
+                                <div>${blurBadge}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${issuesHtml}
+                    ${overrideInfo}
+                </div>
+
+                <!-- Card Actions Bottom -->
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <button type="button" onclick="openFigureZoom('${fig.file_url || thumbSrc}', '${fig.figure_label}')" class="text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg>
+                        <span>Inspect Full-res</span>
+                    </button>
+
+                    <div class="flex items-center gap-2">
+                        ${fig.status !== 'PASS' && fig.status !== 'OVERRIDDEN' ? `
+                            <button type="button" onclick="openFigureOverrideModal(${fig.id}, '${fig.figure_label}')" class="px-2.5 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-[11px] transition-colors">
+                                Accept / Override
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    cardsHtml += '</div>';
+    container.innerHTML = cardsHtml;
+}
+
+function openFigureOverrideModal(figId, label) {
+    activeOverrideFigureId = figId;
+    document.getElementById('overrideFigLabel').textContent = label || 'Figure';
+    document.getElementById('overrideReasonInput').value = '';
+    document.getElementById('figureOverrideModal').classList.remove('hidden');
+}
+
+function closeFigureOverrideModal() {
+    activeOverrideFigureId = null;
+    document.getElementById('figureOverrideModal').classList.add('hidden');
+}
+
+function submitFigureOverride() {
+    if (!activeOverrideFigureId) return;
+    const reason = document.getElementById('overrideReasonInput').value.trim();
+    if (!reason) {
+        alert('Please enter a justification reason for auditing purposes.');
+        return;
+    }
+
+    const btn = document.getElementById('btnSubmitOverride');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    fetch(`/api/figures/${activeOverrideFigureId}/override`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason })
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Override';
+        if (data.success) {
+            closeFigureOverrideModal();
+            loadFiguresData();
+        } else {
+            alert('Failed to override figure: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Override';
+        alert('Request error: ' + err.message);
+    });
+}
+
+function openFigureZoom(url, title) {
+    if (!url) return;
+    document.getElementById('zoomFigImg').src = url;
+    document.getElementById('zoomFigTitle').textContent = title || 'Artwork Zoom View';
+    document.getElementById('zoomDownloadBtn').href = url;
+    document.getElementById('figureZoomModal').classList.remove('hidden');
+}
+
+function closeFigureZoomModal() {
+    document.getElementById('figureZoomModal').classList.add('hidden');
+}
+
+function recheckAllFigures() {
+    const btn = document.getElementById('btnRecheckFigures');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="inline-block animate-spin mr-1">&circlearrowright;</span> Checking...`;
+
+    fetch(`/api/manuscripts/${manuscriptId}/recheck-figures`, {
+        method: 'POST'
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Re-inspect Figures`;
+        if (data.success) {
+            currentFigures = data.figures || [];
+            updateKpiCounters(data.summary || {});
+            renderFiguresList();
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = `Re-inspect Figures`;
+        alert('Recheck error: ' + err.message);
+    });
+}
+
+function uploadFigureFile(input) {
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+
+    const formData = new FormData();
+    formData.append('figure_file', file);
+    formData.append('figure_label', file.name.split('.')[0]);
+
+    const uploadIndicator = document.createElement('div');
+    uploadIndicator.className = 'fixed bottom-4 right-4 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl z-50 text-xs flex items-center gap-2 border border-slate-700';
+    uploadIndicator.innerHTML = `<div class="inline-block animate-spin w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full"></div> Processing and auditing large file (${(file.size / (1024*1024)).toFixed(1)} MB)...`;
+    document.body.appendChild(uploadIndicator);
+
+    fetch(`/api/manuscripts/${manuscriptId}/upload-figure`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.body.removeChild(uploadIndicator);
+        input.value = '';
+        if (data.success) {
+            loadFiguresData();
+        } else {
+            alert('Upload error: ' + (data.error || 'Failed to process figure'));
+        }
+    })
+    .catch(err => {
+        document.body.removeChild(uploadIndicator);
+        input.value = '';
+        alert('Network/Upload failed: ' + err.message);
+    });
+}
+</script>
+
 {% endblock %}

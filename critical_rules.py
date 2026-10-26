@@ -90,7 +90,7 @@ _EMAIL_PATTERN = re.compile(
 )
 
 _REFERENCE_SECTION_HEADERS = [
-    r'^[ \t]*(?:REFERENCES|References|Bibliography|BIBLIOGRAPHY|Literature\s+[Cc]ited)[ \t]*$',
+    r'^[ \t#*]*(?:\d+[\.\)]\s+)?(?:REFERENCES?|References?|Bibliography|BIBLIOGRAPHY|Literature\s+[Cc]ited|Reference\s+List|References\s+and\s+Notes)[ \t\r:*]*$',
 ]
 
 
@@ -110,7 +110,7 @@ def _find_reference_section(text):
         header_len = best_match.end() - best_match.start()
         after_header = ref_text[header_len:]
         end_match = re.search(
-            r'(?im)^\s*(?:Table\s+\d+|Figure\s+\d+|Fig\.\s*\d+|Tables\b|Figures\b|Appendix|Supplementary|SUPPLEMENTARY|APPENDIX)\b',
+            r'(?im)^\s*(?:Table\s+\d+|Figure\s+\d+|Fig\.\s*\d+|Tables\b|Figures\b|Appendix|Supplementary|SUPPLEMENTARY|APPENDIX|Author\s+Contributions?|Funding|Conflicts?\s+of\s+Interest|Declarations?|Data\s+Availability)\b',
             after_header
         )
         if end_match:
@@ -125,13 +125,16 @@ def _extract_reference_entries(ref_text):
 
     Handles numbered references like:
       [1] Author ...
+      [1]. Author ...
       1. Author ...
       1) Author ...
+      1\tAuthor ...
+      ¹ Author ...
     And filters out non-citation text like table rows.
     """
     entries = []
     num_pat = re.compile(
-        r'^[ \t]*(?:\[(\d{1,4})\]|(\d{1,4})[.)]\s+)\s*(\S.+)',
+        r'^[ \t]*(?:\[(\d{1,4})\][.\s]*|(\d{1,4})[.)\t]\s*)\s*(\S.+)',
         re.MULTILINE
     )
     for m in num_pat.finditer(ref_text):
@@ -289,6 +292,8 @@ def _detect_citation_style_from_job_sheet(job_sheet_instructions):
     if not job_sheet_instructions:
         return None
 
+    citation_sections = ['citation', 'reference', 'bibliography', 'ref style', 'cite style']
+
     for instr in job_sheet_instructions:
         section = (instr.section if hasattr(instr, 'section') else instr.get('section', '')).lower().strip()
         instruction = (instr.instruction if hasattr(instr, 'instruction') else instr.get('instruction', '')).lower().strip()
@@ -298,17 +303,21 @@ def _detect_citation_style_from_job_sheet(job_sheet_instructions):
 
         combined = f'{section} {instruction}'
 
+        is_relevant_section = any(k in section for k in citation_sections)
+        if not is_relevant_section and not any(k in instruction for k in ['citation', 'reference', 'bibliography']):
+            continue
+
         # Detect numbered style
-        if ('citation' in combined or 'reference' in combined) and 'numbered' in combined:
+        if re.search(r'\b(?:numbered|numeric|numerical|vancouver|order\s+of\s+appearance|ama|ieee|nlm)\b', combined):
             return 'numbered'
 
         # Detect author-year style
         if ('author' in combined and 'year' in combined) or \
-           ('alphabetical' in combined and ('reference' in combined or 'citation' in combined)):
+           re.search(r'\b(?:author[\s\-]year|alphabetical|harvard|apa(?:\s*\d+)?|chicago|mla)\b', combined):
             return 'author_year'
 
         # Detect unnumbered style
-        if ('citation' in combined or 'reference' in combined) and 'unnumbered' in combined:
+        if re.search(r'\bunnumbered\b', combined):
             return 'unnumbered'
 
     return None
@@ -329,7 +338,7 @@ def _find_section_headings(text):
         'declarations', 'ethics', 'consent', 'availability',
         'competing', 'conflict', 'author', 'contributions',
     }
-    for m in re.finditer(r'^[ \t]*([A-Za-z0-9][^\n]{0,150})[ \t]*$', text, re.MULTILINE):
+    for m in re.finditer(r'^[ \t]*([A-Za-z0-9][^\n]{0,150})[ \t\r]*$', text, re.MULTILINE):
         line = m.group(1).strip()
         # Skip sentences ending with period (unless it's a numbered heading like "1.")
         if line.endswith('.') and not re.match(r'^\d+\.$', line):
@@ -1500,7 +1509,7 @@ RULE_ID_REF_GAP = 'REFERENCE_NUMBER_GAP'
 RULE_ID_REF_ORDER = 'REFERENCE_NUMBER_OUT_OF_ORDER'
 RULE_ID_REF_CITATION_ORDER = 'REFERENCE_CITATION_ORDER_INVALID'
 
-def check_numbered_references(edited_text):
+def check_numbered_references(edited_text, original_text=None):
     """Validate reference numbering is sequential with no duplicates or gaps.
 
     For numbered references, the reference list MUST be in citation order:
@@ -1518,6 +1527,14 @@ def check_numbered_references(edited_text):
     entries = _extract_reference_entries(ref_section)
     if not entries:
         return errors
+
+    # Map original reference entries if available to provide the exact missing line
+    orig_entries_map = {}
+    if original_text:
+        orig_ref_start, orig_ref_section = _find_reference_section(original_text)
+        if orig_ref_section:
+            for oe in _extract_reference_entries(orig_ref_section):
+                orig_entries_map[oe['number']] = oe
 
     numbers = [e['number'] for e in entries]
 
@@ -1550,41 +1567,78 @@ def check_numbered_references(edited_text):
         if unique_sorted[0] != 1:
             first_entry = entries[0]
             offset = ref_start + first_entry['offset']
-            errors.append(_make_critical_error(
-                error_code=RULE_ID_REF_GAP,
-                original_value='1',
-                current_value=str(unique_sorted[0]),
-                page_or_line=None,
-                column_or_field='References',
-                rule_id=RULE_ID_REF_GAP,
-                suggested_action='Reference numbering should start at 1',
-                description=f'Reference numbering starts at [{unique_sorted[0]}] instead of [1].',
-                start_offset=offset,
-                end_offset=offset + len(first_entry['full_match']),
-                full_text=edited_text,
-            ))
+            found_orig_start = False
+            for m_num in range(1, unique_sorted[0]):
+                if m_num in orig_entries_map:
+                    found_orig_start = True
+                    oe = orig_entries_map[m_num]
+                    errors.append(_make_critical_error(
+                        error_code=RULE_ID_REF_GAP,
+                        original_value=oe['full_match'],
+                        current_value=f'[MISSING: Reference {m_num}]',
+                        page_or_line=None,
+                        column_or_field='References',
+                        rule_id=RULE_ID_REF_GAP,
+                        suggested_action=f'Restore missing reference [{m_num}] from approved original: "{oe["text"][:80]}"',
+                        description=f'Reference [{m_num}] line is missing from the reference list: "{oe["text"][:120]}"',
+                        start_offset=offset,
+                        end_offset=offset + len(first_entry['full_match']),
+                        full_text=edited_text,
+                    ))
+            if not found_orig_start:
+                errors.append(_make_critical_error(
+                    error_code=RULE_ID_REF_GAP,
+                    original_value='1',
+                    current_value=str(unique_sorted[0]),
+                    page_or_line=None,
+                    column_or_field='References',
+                    rule_id=RULE_ID_REF_GAP,
+                    suggested_action='Reference numbering should start at 1',
+                    description=f'Reference numbering starts at [{unique_sorted[0]}] instead of [1].',
+                    start_offset=offset,
+                    end_offset=offset + len(first_entry['full_match']),
+                    full_text=edited_text,
+                ))
 
-        # Check for gaps
+        # Check for gaps between numbers
         for i in range(1, len(unique_sorted)):
             if unique_sorted[i] != unique_sorted[i-1] + 1:
                 gap_start = unique_sorted[i-1]
                 gap_end = unique_sorted[i]
-                # Find the entry after the gap
                 gap_entry = next((e for e in entries if e['number'] == gap_end), entries[0])
                 offset = ref_start + gap_entry['offset']
-                errors.append(_make_critical_error(
-                    error_code=RULE_ID_REF_GAP,
-                    original_value=f'Sequential: {gap_start}, {gap_start+1}, ..., {gap_end}',
-                    current_value=f'Gap: {gap_start} → {gap_end}',
-                    page_or_line=None,
-                    column_or_field='References',
-                    rule_id=RULE_ID_REF_GAP,
-                    suggested_action=f'Fill gap in reference numbering between [{gap_start}] and [{gap_end}]',
-                    description=f'Gap in reference numbering: [{gap_start}] → [{gap_end}] (missing {gap_end - gap_start - 1} reference(s)).',
-                    start_offset=offset,
-                    end_offset=offset + len(gap_entry['full_match']),
-                    full_text=edited_text,
-                ))
+                found_orig_gap = False
+                for m_num in range(gap_start + 1, gap_end):
+                    if m_num in orig_entries_map:
+                        found_orig_gap = True
+                        oe = orig_entries_map[m_num]
+                        errors.append(_make_critical_error(
+                            error_code=RULE_ID_REF_GAP,
+                            original_value=oe['full_match'],
+                            current_value=f'[MISSING: Reference {m_num}]',
+                            page_or_line=None,
+                            column_or_field='References',
+                            rule_id=RULE_ID_REF_GAP,
+                            suggested_action=f'Restore missing reference [{m_num}] from approved original: "{oe["text"][:80]}"',
+                            description=f'Reference [{m_num}] line is missing from the reference list: "{oe["text"][:120]}"',
+                            start_offset=offset,
+                            end_offset=offset + len(gap_entry['full_match']),
+                            full_text=edited_text,
+                        ))
+                if not found_orig_gap:
+                    errors.append(_make_critical_error(
+                        error_code=RULE_ID_REF_GAP,
+                        original_value=f'Sequential: {gap_start}, {gap_start+1}, ..., {gap_end}',
+                        current_value=f'Gap: {gap_start} → {gap_end}',
+                        page_or_line=None,
+                        column_or_field='References',
+                        rule_id=RULE_ID_REF_GAP,
+                        suggested_action=f'Fill gap in reference numbering between [{gap_start}] and [{gap_end}]',
+                        description=f'Gap in reference numbering: [{gap_start}] → [{gap_end}] (missing {gap_end - gap_start - 1} reference(s)).',
+                        start_offset=offset,
+                        end_offset=offset + len(gap_entry['full_match']),
+                        full_text=edited_text,
+                    ))
 
         # Check for out-of-order (numbers not in ascending order as they appear)
         for i in range(1, len(numbers)):
@@ -1816,7 +1870,7 @@ def check_unnumbered_references(edited_text):
     return errors
 
 
-def check_references(edited_text, job_sheet_instructions=None):
+def check_references(edited_text, job_sheet_instructions=None, original_text=None):
     """Validate References rule group.
 
     Supports numbered citation order, author-year alphabetical order,
@@ -1833,14 +1887,14 @@ def check_references(edited_text, job_sheet_instructions=None):
     elif style == 'unnumbered':
         errors.extend(check_unnumbered_references(edited_text))
     elif style == 'numbered':
-        errors.extend(check_numbered_references(edited_text))
+        errors.extend(check_numbered_references(edited_text, original_text=original_text))
     else:
         # Auto-detect style from manuscript content
         ref_start, ref_section = _find_reference_section(edited_text)
         if ref_section:
             has_numbers = bool(re.search(r'^[ \t]*\[?(\d+)\]?[.\):]?\s+', ref_section, re.MULTILINE))
             if has_numbers:
-                errors.extend(check_numbered_references(edited_text))
+                errors.extend(check_numbered_references(edited_text, original_text=original_text))
             else:
                 errors.extend(check_author_year_reference_order(edited_text))
 
@@ -2001,11 +2055,10 @@ def run_critical_rules(original_text, edited_text, job_sheet_instructions=None):
       4. Corresponding Author Name
       5. References
 
-    Strict validation output policy:
-      - Only these five rule groups may run and show results.
-      - Do not run, show, save, or display any other validation result.
-      - Do not show Warning, Review, Info, grammar, spelling, punctuation, formatting, style, table, figure, content-change, or any global rule result.
-      - Every issue produced by the allowed five rule groups must have Severity = Critical.
+    Validation Policy:
+      - Reminder Only instructions must NEVER create an error.
+      - Only instructions configured as Validation Rule and enabled in the project job sheet may create QC errors.
+      - Support thousands of journals and instructions through indexed queries by journalNumber and active status.
 
     Returns:
       (errors_list, active_rule_ids, rule_run_log)
@@ -2014,13 +2067,20 @@ def run_critical_rules(original_text, edited_text, job_sheet_instructions=None):
     active_rule_ids = []
     rule_run_log = []
 
+    # Safeguard: strictly filter out any Reminder Only instruction so it can NEVER produce an error
+    if job_sheet_instructions:
+        job_sheet_instructions = [
+            inst for inst in job_sheet_instructions
+            if not getattr(inst, 'type', None) or getattr(inst, 'type', None) != 'Reminder Only'
+        ]
+
     # If specific instructions exist, they can inform reference style
     MANDATORY_RULES = [
         ('article_title', RULE_ID_TITLE, 'Article Title', lambda o, e: check_article_title(o, e, job_sheet_instructions), [original_text, edited_text]),
         ('author_name', RULE_ID_AUTHOR, 'Author Name(s)', check_author_names, [original_text, edited_text]),
         ('affiliation', RULE_ID_AFFILIATION, 'Affiliation(s)', check_affiliations, [original_text, edited_text]),
         ('corresponding_author_name', RULE_ID_CORRESPONDING_NAME_CHANGED, 'Corresponding Author Name', check_corresponding_author_name, [original_text, edited_text]),
-        ('references', 'REFERENCES_CHECK', 'References', lambda o, e: check_references(e, job_sheet_instructions), [original_text, edited_text]),
+        ('references', 'REFERENCES_CHECK', 'References', lambda o, e: check_references(e, job_sheet_instructions, o), [original_text, edited_text]),
     ]
 
     for rule_key, rule_id, rule_name, rule_func, args in MANDATORY_RULES:

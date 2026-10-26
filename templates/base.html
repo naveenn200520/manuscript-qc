@@ -3,9 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Manuscript QC Platform{% endblock %}</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>{% block title %}{{ app_name|default('Journal Guard') }} - Manuscript & Artwork QC{% endblock %}</title>
+    <!-- PWA Settings & App Icons -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d9488">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Journal Guard">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192.png') }}">
+    <!-- Tailwind CSS: Bundled locally for full offline support with CDN fallback -->
+    <script src="{{ url_for('static', filename='js/tailwind.min.js') }}"></script>
+    <script>
+        if (typeof tailwind === 'undefined') {
+            document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+        }
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -85,5 +98,16 @@
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
     {% block content %}{% endblock %}
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(reg => console.log('PWA ServiceWorker registered successfully:', reg.scope))
+                    .catch(err => console.log('PWA ServiceWorker registration note:', err));
+            });
+        }
+    </script>
 </body>
 </html>

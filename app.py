@@ -8,31 +8,45 @@ from datetime import datetime
 from models import (db, User, Team, UserTeam, StyleRule, RuleSection, RuleVersion,
                     UserPermission, ReferenceStyle, ReferenceRule,
                     Project, Manuscript, ErrorRecord, JobSheet, JobSheetInstruction,
-                    AuditLog, CriticalRuleApproval)
+                    AuditLog, CriticalRuleApproval, JournalInstruction,
+                    ImageCriterion, FigureInspection)
 from qc_engine import run_content_qc, restore_original
 from job_sheet_parser import parse_job_sheet
 from critical_rules import run_critical_rules, CRITICAL_RULES_REGISTRY
+from image_qc import (extract_figures_from_docx, save_uploaded_figure_file,
+                      inspect_figure, find_figure_callouts, seed_default_image_criteria,
+                      process_manuscript_figures)
 import tempfile
 import mammoth
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'super-secret-manuscript-key-123'
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # Support up to 500 MB file uploads
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # Support up to 1 GB file uploads
 basedir = os.path.abspath(os.path.dirname(__file__))
 import shutil
-if os.environ.get('VERCEL') == '1':
+db_uri = os.environ.get('DATABASE_URL')
+if db_uri:
+    if db_uri.startswith('postgres://'):
+        db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {}
+elif os.environ.get('VERCEL') == '1':
     tmp_db_path = '/tmp/qc_platform.db'
     orig_db_path = os.path.join(basedir, 'qc_platform.db')
     if not os.path.exists(tmp_db_path) and os.path.exists(orig_db_path):
         shutil.copy2(orig_db_path, tmp_db_path)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + tmp_db_path
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'connect_args': {'timeout': 20}
+    }
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'qc_platform.db')
-
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'connect_args': {'timeout': 20}  # Helps prevent 'database is locked' errors under concurrent load
-}
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'connect_args': {'timeout': 20}
+    }
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Instant live reloading for CSS/JS assets
 
 # Register custom Jinja2 filters
 import json as _json
@@ -76,9 +90,108 @@ def get_rule_group(error_type_or_code):
 
 app.jinja_env.filters['rule_group'] = get_rule_group
 
+def extract_journal_number(project_or_name, job_sheet=None):
+    """
+    Extract journalNumber from Project ID / Name format: JOURNAL_YEAR_ARTICLE
+    Example: '520_2026_23212' -> '520'
+    Treats journalNumber as a string to preserve leading zeros (e.g. '052', '007').
+    Fallback to job sheet instructions, job sheet filename, or manuscripts if project name does not contain standard format.
+    """
+    name = ""
+    project = None
+    if isinstance(project_or_name, str):
+        name = project_or_name.strip()
+    elif hasattr(project_or_name, 'name'):
+        project = project_or_name
+        name = (project_or_name.name or "").strip()
+        if not job_sheet:
+            if hasattr(project_or_name, 'job_sheet') and project_or_name.job_sheet:
+                job_sheet = project_or_name.job_sheet
+            elif hasattr(project_or_name, 'job_sheet_id') and project_or_name.job_sheet_id:
+                try:
+                    job_sheet = db.session.get(JobSheet, project_or_name.job_sheet_id)
+                except Exception:
+                    job_sheet = None
+
+    # 1. JobSheet instructions (Highest authority for metadata from publisher XML/DOCX)
+    if job_sheet and hasattr(job_sheet, 'instructions'):
+        for inst in job_sheet.instructions:
+            sec = (inst.section or "").strip().lower()
+            text = (inst.instruction or "").strip()
+            if sec in ('journal id', 'journal number', 'journal', 'journal i d', 'journal code', 'journal_id'):
+                m = re.search(r'([A-Za-z0-9]+)', text)
+                if m:
+                    cand = m.group(1).strip()
+                    if cand.isdigit() or len(cand) >= 2:
+                        return cand
+            m_text = re.search(r'journal\s*(?:id|number|#)?\s*[:=\-]?\s*([A-Za-z0-9]+)', text, re.IGNORECASE)
+            if m_text:
+                return m_text.group(1).strip()
+
+    # 2. Strict Project ID format: JOURNAL_YEAR_ARTICLE (e.g. 520_2026_23212, 052_2026_111, 540-2026-03899)
+    if name:
+        m = re.match(r'^([A-Za-z0-9]+)[_\-](\d{4})[_\-]', name)
+        if m:
+            return m.group(1).strip()
+
+    # 3. JobSheet filename (e.g. 540_2026_3899_JobSheet_200.xml)
+    if job_sheet and hasattr(job_sheet, 'filename') and job_sheet.filename:
+        m = re.match(r'^([A-Za-z0-9]+)[_\-](\d{4})', job_sheet.filename)
+        if m:
+            return m.group(1).strip()
+        m_num = re.match(r'^(\d+)', job_sheet.filename)
+        if m_num:
+            return m_num.group(1).strip()
+
+    # 4. Pure numeric project name (e.g. '540', '052')
+    if name and re.match(r'^\d+$', name):
+        return name
+
+    # 5. Check if project name segment before delimiter matches an existing journal in DB
+    if name:
+        m = re.match(r'^([A-Za-z0-9]+)[_\-]', name)
+        if m:
+            cand = m.group(1).strip()
+            try:
+                if cand.isdigit() or JournalInstruction.query.filter_by(journal_number=cand, active=True).first():
+                    return cand
+            except Exception:
+                if cand.isdigit():
+                    return cand
+
+    # 6. Check if project name directly matches an existing journal in DB
+    if name:
+        try:
+            if JournalInstruction.query.filter_by(journal_number=name, active=True).first():
+                return name
+        except Exception:
+            pass
+
+    # 7. Check project team name
+    if project and hasattr(project, 'team') and project.team and project.team.name:
+        tname = project.team.name.strip()
+        m_team = re.search(r'\b(\d{2,6})\b', tname)
+        if m_team:
+            return m_team.group(1).strip()
+        try:
+            if JournalInstruction.query.filter_by(journal_number=tname, active=True).first():
+                return tname
+        except Exception:
+            pass
+
+    return "Unknown"
+
+app.jinja_env.filters['journal_number'] = extract_journal_number
+
 @app.context_processor
 def inject_rule_helpers():
-    return {'get_rule_group': get_rule_group}
+    return {
+        'get_rule_group': get_rule_group,
+        'extract_journal_number': extract_journal_number,
+        'app_name': 'Journal Guard',
+        'app_subtitle': 'Intelligent Manuscript & Artwork Quality Assurance',
+        'asset_version': int(datetime.utcnow().timestamp())
+    }
 
 db.init_app(app)
 login_manager = LoginManager()
@@ -197,6 +310,27 @@ def init_db():
                                      severity='Style', priority='Medium', status='Active'))
             db.session.commit()
 
+        if ReferenceStyle.query.count() == 0:
+            admin_user = User.query.filter_by(role='admin').first()
+            admin_id = admin_user.id if admin_user else 1
+
+            vancouver = ReferenceStyle(name='Vancouver', description='Numbered citation style according to order of appearance in text.', is_active=True, created_by=admin_id)
+            db.session.add(vancouver)
+            db.session.commit()
+            db.session.add(ReferenceRule(ref_style_id=vancouver.id, category='Citation numbering', rule_text='References must be numbered consecutively in order of first appearance.'))
+            db.session.add(ReferenceRule(ref_style_id=vancouver.id, category='DOI', rule_text='Include DOI when available.'))
+
+            harvard = ReferenceStyle(name='Harvard', description='Author-year alphabetical reference style.', is_active=True, created_by=admin_id)
+            db.session.add(harvard)
+            db.session.commit()
+            db.session.add(ReferenceRule(ref_style_id=harvard.id, category='Author format', rule_text='References listed alphabetically by primary author surname.'))
+
+            apa = ReferenceStyle(name='APA 7th', description='American Psychological Association reference style.', is_active=True, created_by=admin_id)
+            db.session.add(apa)
+            db.session.commit()
+            db.session.add(ReferenceRule(ref_style_id=apa.id, category='Author format', rule_text='Author surname followed by initials and publication year.'))
+            db.session.commit()
+
 init_db()
 
 # ─────────────────────────────────────────────
@@ -222,6 +356,16 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+@app.route('/manifest.json')
+def manifest():
+    return send_file(os.path.join(basedir, 'static', 'manifest.json'), mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def service_worker():
+    response = send_file(os.path.join(basedir, 'static', 'sw.js'), mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
 # ─────────────────────────────────────────────
 # DASHBOARD / PROJECTS
 # ─────────────────────────────────────────────
@@ -243,8 +387,11 @@ def dashboard():
         ErrorRecord.status == 'OPEN',
         ErrorRecord.severity == 'CRITICAL'
     ).count()
+    total_figures = FigureInspection.query.count()
+    figure_issues = FigureInspection.query.filter(FigureInspection.status.in_(['WARNING', 'FAIL'])).count()
     return render_template('dashboard.html', projects=projects, total=total_projects,
-                           pending=pending_qc, critical=critical_errors, completed=completed)
+                           pending=pending_qc, critical=critical_errors, completed=completed,
+                           total_figures=total_figures, figure_issues=figure_issues)
 
 @app.route('/projects', methods=['GET'])
 @login_required
@@ -351,6 +498,53 @@ def new_project():
                 elif fname.endswith('.xml') or fname.endswith('.txt'):
                     file_obj.seek(0)
                     return file_obj.read().decode('utf-8', errors='ignore')
+                elif fname.endswith('.pdf'):
+                    # 1. Primary: Extract text using pdfplumber
+                    try:
+                        import pdfplumber
+                        file_obj.seek(0)
+                        pages_text = []
+                        with pdfplumber.open(file_obj) as pdf:
+                            for page in pdf.pages:
+                                t = page.extract_text()
+                                if t:
+                                    pages_text.append(t)
+                        extracted = '\n\n'.join(pages_text)
+                        if extracted and extracted.strip():
+                            return extracted
+                    except Exception as e:
+                        print(f"[PDF Extract] pdfplumber fallback: {e}")
+
+                    # 2. Fallback: pdfminer.six
+                    try:
+                        from pdfminer.high_level import extract_text as pdfminer_extract
+                        file_obj.seek(0)
+                        extracted = pdfminer_extract(file_obj)
+                        if extracted and extracted.strip():
+                            return extracted
+                    except Exception as e:
+                        print(f"[PDF Extract] pdfminer fallback: {e}")
+
+                    # 3. Fallback: pypdfium2
+                    try:
+                        import pypdfium2 as pdfium
+                        file_obj.seek(0)
+                        pdf = pdfium.PdfDocument(file_obj.read())
+                        pages_text = [page.get_textpage().get_text_range() for page in pdf]
+                        extracted = '\n\n'.join(p for p in pages_text if p and p.strip())
+                        if extracted and extracted.strip():
+                            return extracted
+                    except Exception as e:
+                        print(f"[PDF Extract] pypdfium2 fallback: {e}")
+
+                    # 4. Fallback in case raw text/XML was saved with a .pdf extension
+                    try:
+                        file_obj.seek(0)
+                        raw = file_obj.read().decode('utf-8', errors='ignore')
+                        if raw.strip().startswith('<') or len(raw.strip()) > 30:
+                            return raw
+                    except Exception:
+                        pass
             except Exception:
                 pass
             return None
@@ -372,6 +566,13 @@ def new_project():
         if not my_text or not my_text.strip():
             my_file = request.files.get('xml_file')
             my_text = extract_text(my_file)
+
+        if not name or not str(name).strip():
+            m_file = request.files.get('manuscript_file')
+            if m_file and getattr(m_file, 'filename', ''):
+                name = os.path.splitext(os.path.basename(m_file.filename))[0]
+            else:
+                name = f"Project_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         project = Project(name=name, team_id=team_id)
         db.session.add(project)
@@ -415,6 +616,12 @@ def new_project():
             job_sheet_instructions = JobSheetInstruction.query.filter_by(
                 job_sheet_id=job_sheet.id
             ).all()
+
+        # Normalize newlines
+        if author_text:
+            author_text = author_text.replace('\r\n', '\n').replace('\r', '\n')
+        if my_text:
+            my_text = my_text.replace('\r\n', '\n').replace('\r', '\n')
 
         # Create manuscript — edited_text is working_text, original_text is author_text
         # The working_text stores the EDITED manuscript EXACTLY as uploaded — never auto-corrected
@@ -481,8 +688,39 @@ def new_project():
             ))
 
         manuscript.status = 'QC Complete'
+
+        # ── Journal Guard: Image Quality & Artwork Inspection ──
+        try:
+            author_file_obj = request.files.get('manuscript_file')
+            edited_file_obj = request.files.get('xml_file')
+            figure_files = request.files.getlist('figure_files')
+            figures_zip = request.files.get('figures_zip')
+            
+            process_manuscript_figures(
+                manuscript=manuscript,
+                author_file=author_file_obj,
+                edited_file=edited_file_obj,
+                figure_files=figure_files,
+                figures_zip=figures_zip,
+                base_dir=basedir,
+                db_session=db.session,
+                ImageCriterionModel=ImageCriterion,
+                FigureInspectionModel=FigureInspection
+            )
+        except Exception as fig_err:
+            print(f"[Journal Guard] Image QC error: {fig_err}")
+
+        # Explicit Audit Log entry for staff running files through QC
+        author_fname = getattr(request.files.get('manuscript_file'), 'filename', '') or 'Manuscript'
+        log_audit(
+            action='RUN_QC',
+            object_type='Project',
+            object_id=project.id,
+            old_value=None,
+            new_value=f"Ran QC on '{project.name}' (File: {author_fname}) - {len(errors)} critical issues detected"
+        )
+
         db.session.commit()
-        flash('Project created and QC completed.', 'success')
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
             return jsonify({
                 'success': True,
@@ -518,10 +756,21 @@ def review_project(project_id):
     # 3. Existing records for this manuscript to preserve resolved/approved status
     existing_records = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).all()
     preserved_status = {}
+    type_status = {}
+    all_previously_resolved = bool(existing_records) and all(r.status != 'OPEN' for r in existing_records)
     for r in existing_records:
-        key = (r.error_type, r.description)
-        if r.status != 'OPEN' and key not in preserved_status:
+        key = (r.error_type, (r.description or '').strip())
+        if r.status != 'OPEN':
             preserved_status[key] = r.status
+            if r.error_type not in type_status:
+                type_status[r.error_type] = r.status
+
+    # Normalize any carriage returns in existing manuscript text
+    if manuscript.original_text and '\r' in manuscript.original_text:
+        manuscript.original_text = manuscript.original_text.replace('\r\n', '\n').replace('\r', '\n')
+    if manuscript.working_text and '\r' in manuscript.working_text:
+        manuscript.working_text = manuscript.working_text.replace('\r\n', '\n').replace('\r', '\n')
+    db.session.commit()
 
     # 4. Run ONLY the 5 mandatory Critical rule groups
     critical_errors, critical_rule_ids, critical_run_log = run_critical_rules(
@@ -559,8 +808,15 @@ def review_project(project_id):
     # Re-insert strictly the active critical errors with preserved status and accurate line/col
     for err_dict in critical_errors:
         ln, col = calc_line_col(manuscript.working_text, err_dict.get('start_offset'))
-        key = (err_dict['error_type'], err_dict.get('description'))
-        st = preserved_status.get(key, 'OPEN')
+        desc_clean = (err_dict.get('description') or '').strip()
+        key = (err_dict['error_type'], desc_clean)
+        st = preserved_status.get(key)
+        if not st:
+            st = type_status.get(err_dict['error_type'])
+        if not st and all_previously_resolved:
+            st = 'IGNORED'
+        if not st:
+            st = 'OPEN'
         new_err = ErrorRecord(
             manuscript_id=manuscript.id,
             error_type=err_dict['error_type'],
@@ -580,6 +836,27 @@ def review_project(project_id):
             rule_id=None,
         )
         db.session.add(new_err)
+
+    # Refresh figure inspections against text callouts & criteria
+    try:
+        j_num = extract_journal_number(project, project.job_sheet)
+        crit_list = ImageCriterion.query.filter(
+            ImageCriterion.is_active == True,
+            ImageCriterion.journal_number.in_([j_num, 'ALL'])
+        ).all()
+        if not crit_list:
+            crit_list = ImageCriterion.query.filter_by(is_active=True).all()
+        text_calls = find_figure_callouts(manuscript.working_text)
+        for fig in manuscript.figures:
+            abs_p = os.path.join(basedir, fig.file_path.replace('/', os.sep))
+            if os.path.exists(abs_p):
+                insp = inspect_figure(abs_p, criteria_list=crit_list, text_callouts=text_calls, figure_label=fig.figure_label)
+                if fig.status != 'OVERRIDDEN':
+                    fig.status = insp['status']
+                fig.issues_json = json.dumps(insp['issues'])
+                fig.is_cited_in_text = insp['is_cited_in_text']
+    except Exception as e:
+        print(f"[Journal Guard] Error refreshing figures on rerun: {e}")
 
     db.session.commit()
 
@@ -638,6 +915,16 @@ def review_project(project_id):
     critical_blocked = len(unapproved_critical) > 0
 
     qc_status = 'PASS' if critical_count == 0 else 'CRITICAL ERROR FOUND'
+    journal_number = extract_journal_number(project)
+
+    figures = manuscript.figures
+    fig_summary = {
+        'total': len(figures),
+        'pass': len([f for f in figures if f.status == 'PASS']),
+        'warning': len([f for f in figures if f.status == 'WARNING']),
+        'fail': len([f for f in figures if f.status == 'FAIL']),
+        'overridden': len([f for f in figures if f.status == 'OVERRIDDEN'])
+    }
 
     return render_template('review.html', project=project, manuscript=manuscript,
                            errors=all_errors, open_errors=open_errors,
@@ -649,7 +936,10 @@ def review_project(project_id):
                            critical_blocked=critical_blocked,
                            unapproved_critical_count=len(unapproved_critical),
                            rule_group_counts=rule_group_counts,
-                           get_rule_group=get_rule_group)
+                           get_rule_group=get_rule_group,
+                           journal_number=journal_number,
+                           figures=figures,
+                           figures_summary=fig_summary)
 
 
 @app.route('/projects/<int:project_id>/qc-data')
@@ -692,10 +982,20 @@ def qc_data(project_id):
     open_count = len([e for e in all_errors if e.status == 'OPEN'])
     critical_count = open_count
 
+    figures_json = [f.to_dict() for f in manuscript.figures]
+
     return jsonify({
         'manuscript_text': manuscript.working_text,
         'original_text': manuscript.original_text,
         'errors': errors_json,
+        'figures': figures_json,
+        'figures_summary': {
+            'total': len(figures_json),
+            'pass': len([f for f in figures_json if f['status'] == 'PASS']),
+            'warning': len([f for f in figures_json if f['status'] == 'WARNING']),
+            'fail': len([f for f in figures_json if f['status'] == 'FAIL']),
+            'overridden': len([f for f in figures_json if f['status'] == 'OVERRIDDEN'])
+        },
         'summary': {
             'total': len(all_errors),
             'open': open_count,
@@ -968,6 +1268,8 @@ def skip_all_errors(project_id):
             e.resolved_at = datetime.utcnow()
         db.session.commit()
         flash('All remaining errors were skipped.', 'info')
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': 'All remaining errors were skipped.', 'unlocked': True})
     return redirect(url_for('review_project', project_id=project.id))
 
 @app.route('/projects/<int:project_id>/delete', methods=['POST'])
@@ -1309,6 +1611,732 @@ def audit_logs():
     return render_template('audit_logs.html', logs=logs)
 
 # ─────────────────────────────────────────────
+# JOURNAL INSTRUCTION LIBRARY (API & ADMIN)
+# ─────────────────────────────────────────────
+
+@app.route('/api/projects/<int:project_id>/journal-instructions')
+@login_required
+def api_project_journal_instructions(project_id):
+    """
+    JSON API for the QC Review popup and full instruction drawer.
+    Strictly isolated: Never returns instructions belonging to another journal.
+    Uses indexed database query by (journal_number, active).
+    """
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+    if not is_admin() and project.team_id not in get_user_team_ids():
+        return jsonify({'error': 'Access denied'}), 403
+
+    journal_number = extract_journal_number(project)
+    if not journal_number or journal_number == 'Unknown':
+        return jsonify({
+            'success': True,
+            'journalNumber': 'Unknown',
+            'journalName': 'Unknown Journal',
+            'reminders': [],
+            'totalReminders': 0,
+            'allInstructions': [],
+            'categories': {}
+        })
+
+    # Indexed query on (journal_number, active)
+    active_instructions = JournalInstruction.query.filter_by(
+        journal_number=journal_number,
+        active=True
+    ).all()
+
+    # Determine journal name
+    journal_name = f"Journal {journal_number}"
+    for inst in active_instructions:
+        if inst.journal_name and len(inst.journal_name.strip()) > 0 and len(inst.journal_name.strip()) <= 80 and not inst.journal_name.strip().lower().startswith('line ') and '\n' not in inst.journal_name:
+            journal_name = inst.journal_name.strip()
+            break
+
+    # If journal_name is still default f"Journal {journal_number}", check Job Sheet for Journal Title
+    if journal_name == f"Journal {journal_number}" and project.job_sheet_id:
+        js = project.job_sheet or db.session.get(JobSheet, project.job_sheet_id)
+        if js and js.instructions:
+            for i in js.instructions:
+                if (i.section or '').strip().lower() in ('journal title', 'journal name'):
+                    if i.instruction and i.instruction.strip():
+                        journal_name = f"{i.instruction.strip()} (Journal {journal_number})"
+                        break
+
+    PRIORITY_WEIGHT = {'High': 1, 'Medium': 2, 'Low': 3}
+
+    # 1. Active Reminder Only instructions, sorted by priority (High > Medium > Low)
+    reminders = [i for i in active_instructions if i.type == 'Reminder Only']
+    reminders.sort(key=lambda x: (PRIORITY_WEIGHT.get(x.priority, 2), -x.id))
+    # Slice the first 5 reminders
+    reminders_top5 = [i.to_dict() for i in reminders[:5]]
+
+    # 2. All active instructions for this journal
+    all_sorted = sorted(
+        active_instructions,
+        key=lambda x: (x.category or 'General', PRIORITY_WEIGHT.get(x.priority, 2), -x.id)
+    )
+    all_dicts = [i.to_dict() for i in all_sorted]
+
+    # 3. Group by category
+    categories = {}
+    for d in all_dicts:
+        cat = d['category'] or 'General'
+        categories.setdefault(cat, []).append(d)
+
+    return jsonify({
+        'success': True,
+        'journalNumber': journal_number,
+        'journalName': journal_name,
+        'reminders': reminders_top5,
+        'totalReminders': len(reminders),
+        'allInstructions': all_dicts,
+        'categories': categories
+    })
+
+
+@app.route('/admin/journal-instructions')
+@login_required
+def admin_journal_instructions():
+    """Admin page: central Journal Instruction Library."""
+    if not is_admin():
+        abort(403)
+
+    instructions = JournalInstruction.query.order_by(
+        JournalInstruction.journal_number.asc(),
+        JournalInstruction.priority.asc(),
+        JournalInstruction.id.desc()
+    ).all()
+
+    total_count = len(instructions)
+    active_count = sum(1 for i in instructions if i.active)
+    reminder_count = sum(1 for i in instructions if i.type == 'Reminder Only')
+    validation_count = sum(1 for i in instructions if i.type == 'Validation Rule')
+    distinct_journals = sorted(list({i.journal_number for i in instructions}))
+    unique_journals_count = len(distinct_journals)
+
+    return render_template(
+        'journal_instructions.html',
+        instructions=instructions,
+        total_count=total_count,
+        active_count=active_count,
+        reminder_count=reminder_count,
+        validation_count=validation_count,
+        distinct_journals=distinct_journals,
+        unique_journals_count=unique_journals_count
+    )
+
+
+@app.route('/admin/journal-instructions/create', methods=['POST'])
+@login_required
+def admin_journal_instructions_create():
+    """Add a new journal instruction."""
+    if not is_admin():
+        abort(403)
+
+    j_num = (request.form.get('journal_number') or '').strip()
+    if not j_num:
+        flash('Journal Number is required.', 'error')
+        return redirect(url_for('admin_journal_instructions'))
+
+    inst_text = (request.form.get('instruction_text') or '').strip()
+    if not inst_text:
+        flash('Instruction text is required.', 'error')
+        return redirect(url_for('admin_journal_instructions'))
+
+    j_name = (request.form.get('journal_name') or '').strip() or None
+    category = (request.form.get('category') or 'General').strip()
+    inst_type = (request.form.get('type') or 'Reminder Only').strip()
+    priority = (request.form.get('priority') or 'Medium').strip()
+    source = (request.form.get('source') or 'Manual').strip()
+    version = (request.form.get('version') or '1.0').strip()
+    is_active = bool(request.form.get('active'))
+
+    instruction = JournalInstruction(
+        journal_number=j_num,  # string preserving leading zeros
+        journal_name=j_name,
+        category=category,
+        instruction_text=inst_text,
+        type=inst_type,
+        priority=priority,
+        source=source,
+        version=version,
+        active=is_active,
+        created_by=current_user.id
+    )
+    db.session.add(instruction)
+    db.session.commit()
+
+    log_audit('CREATE_JOURNAL_INSTRUCTION', 'JournalInstruction', instruction.id, None,
+              f"Created instruction for Journal {j_num} ({inst_type}) by {current_user.name}")
+    db.session.commit()
+
+    flash(f'Instruction for Journal {j_num} created successfully.', 'success')
+    return redirect(url_for('admin_journal_instructions'))
+
+
+@app.route('/admin/journal-instructions/<int:instruction_id>/edit', methods=['POST'])
+@login_required
+def admin_journal_instructions_edit(instruction_id):
+    """Edit an existing journal instruction."""
+    if not is_admin():
+        abort(403)
+
+    inst = db.session.get(JournalInstruction, instruction_id)
+    if not inst:
+        flash('Instruction not found.', 'error')
+        return redirect(url_for('admin_journal_instructions'))
+
+    j_num = (request.form.get('journal_number') or '').strip()
+    if j_num:
+        inst.journal_number = j_num
+    j_name = (request.form.get('journal_name') or '').strip()
+    inst.journal_name = j_name or None
+    inst.category = (request.form.get('category') or 'General').strip()
+    inst.instruction_text = (request.form.get('instruction_text') or inst.instruction_text).strip()
+    inst.type = (request.form.get('type') or inst.type).strip()
+    inst.priority = (request.form.get('priority') or inst.priority).strip()
+    inst.source = (request.form.get('source') or inst.source).strip()
+    inst.version = (request.form.get('version') or inst.version).strip()
+    inst.active = bool(request.form.get('active'))
+    inst.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    log_audit('EDIT_JOURNAL_INSTRUCTION', 'JournalInstruction', inst.id, None,
+              f"Updated instruction {inst.id} for Journal {inst.journal_number} by {current_user.name}")
+    db.session.commit()
+
+    flash(f'Instruction {inst.id} updated successfully.', 'success')
+    return redirect(url_for('admin_journal_instructions'))
+
+
+@app.route('/admin/journal-instructions/<int:instruction_id>/toggle', methods=['POST'])
+@login_required
+def admin_journal_instructions_toggle(instruction_id):
+    """Activate or deactivate a journal instruction."""
+    if not is_admin():
+        abort(403)
+
+    inst = db.session.get(JournalInstruction, instruction_id)
+    if not inst:
+        flash('Instruction not found.', 'error')
+        return redirect(url_for('admin_journal_instructions'))
+
+    inst.active = not inst.active
+    inst.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    status_str = 'activated' if inst.active else 'deactivated'
+    log_audit('TOGGLE_JOURNAL_INSTRUCTION', 'JournalInstruction', inst.id, None,
+              f"{status_str.capitalize()} instruction {inst.id} for Journal {inst.journal_number}")
+    db.session.commit()
+
+    flash(f"Instruction {inst.id} {status_str}.", 'success')
+    return redirect(url_for('admin_journal_instructions'))
+
+
+@app.route('/admin/journal-instructions/<int:instruction_id>/delete', methods=['POST'])
+@login_required
+def admin_journal_instructions_delete(instruction_id):
+    """Delete a journal instruction."""
+    if not is_admin():
+        abort(403)
+
+    inst = db.session.get(JournalInstruction, instruction_id)
+    if not inst:
+        flash('Instruction not found.', 'error')
+        return redirect(url_for('admin_journal_instructions'))
+
+    j_num = inst.journal_number
+    db.session.delete(inst)
+    db.session.commit()
+
+    log_audit('DELETE_JOURNAL_INSTRUCTION', 'JournalInstruction', instruction_id, None,
+              f"Deleted instruction {instruction_id} for Journal {j_num} by {current_user.name}")
+    db.session.commit()
+
+    flash(f'Instruction deleted successfully.', 'success')
+    return redirect(url_for('admin_journal_instructions'))
+
+
+@app.route('/admin/journal-instructions/import-xwiki', methods=['POST'])
+@login_required
+def admin_journal_instructions_import_xwiki():
+    """Import journal instructions from XWiki with source and version tracking."""
+    if not is_admin():
+        abort(403)
+
+    source = (request.form.get('source') or 'XWiki').strip()
+    version = (request.form.get('version') or '1.0').strip()
+    payload = (request.form.get('payload') or '').strip()
+
+    file = request.files.get('import_file')
+    if file and file.filename:
+        try:
+            file_content = file.read().decode('utf-8', errors='ignore')
+            if file_content.strip():
+                payload = file_content.strip()
+        except Exception as e:
+            flash(f'Error reading uploaded file: {e}', 'error')
+            return redirect(url_for('admin_journal_instructions'))
+
+    if not payload:
+        flash('Please provide data to import (paste JSON/CSV or upload a file).', 'error')
+        return redirect(url_for('admin_journal_instructions'))
+
+    imported_count = 0
+
+    # Try parsing as JSON first
+    parsed_json = None
+    try:
+        parsed_json = json.loads(payload)
+    except Exception:
+        pass
+
+    if isinstance(parsed_json, list):
+        for item in parsed_json:
+            if not isinstance(item, dict):
+                continue
+            j_num = str(item.get('journalNumber') or item.get('journal_number') or '').strip()
+            text = str(item.get('instructionText') or item.get('instruction_text') or item.get('instruction') or '').strip()
+            if not j_num or not text:
+                continue
+
+            j_name = str(item.get('journalName') or item.get('journal_name') or '').strip() or None
+            category = str(item.get('category') or 'General').strip()
+            raw_type = str(item.get('type') or 'Reminder Only').strip()
+            inst_type = 'Validation Rule' if 'validation' in raw_type.lower() else 'Reminder Only'
+            raw_pri = str(item.get('priority') or 'Medium').strip().capitalize()
+            priority = raw_pri if raw_pri in ('High', 'Medium', 'Low') else 'Medium'
+            active = bool(item.get('active', True))
+
+            inst = JournalInstruction(
+                journal_number=j_num,
+                journal_name=j_name,
+                category=category,
+                instruction_text=text,
+                type=inst_type,
+                priority=priority,
+                source=source,
+                version=version,
+                active=active,
+                created_by=current_user.id
+            )
+            db.session.add(inst)
+            imported_count += 1
+
+    else:
+        # Parse CSV or pipe-delimited XWiki table
+        import csv
+        import io
+        lines = [line.strip() for line in payload.splitlines() if line.strip()]
+
+        is_pipe_table = any(line.startswith('|') for line in lines)
+        if is_pipe_table:
+            for line in lines:
+                parts = [p.strip() for p in line.split('|')]
+                parts = [p for p in parts if p != '']
+                if len(parts) >= 2:
+                    j_num = parts[0].strip()
+                    if j_num.lower() in ('journal', 'journalnumber', 'journal id', '#'):
+                        continue
+                    text = parts[1].strip()
+                    raw_type = parts[2].strip() if len(parts) > 2 else 'Reminder Only'
+                    inst_type = 'Validation Rule' if 'validation' in raw_type.lower() else 'Reminder Only'
+                    raw_pri = (parts[3].strip() if len(parts) > 3 else 'Medium').capitalize()
+                    priority = raw_pri if raw_pri in ('High', 'Medium', 'Low') else 'Medium'
+                    category = parts[4].strip() if len(parts) > 4 else 'General'
+                    j_name = parts[5].strip() if len(parts) > 5 else None
+
+                    inst = JournalInstruction(
+                        journal_number=j_num,
+                        journal_name=j_name,
+                        category=category,
+                        instruction_text=text,
+                        type=inst_type,
+                        priority=priority,
+                        source=source,
+                        version=version,
+                        active=True,
+                        created_by=current_user.id
+                    )
+                    db.session.add(inst)
+                    imported_count += 1
+        else:
+            reader = csv.reader(io.StringIO(payload))
+            for row in reader:
+                if not row or len(row) < 2:
+                    continue
+                j_num = row[0].strip()
+                if j_num.lower() in ('journalnumber', 'journal_number', 'journal', 'journal id'):
+                    continue
+                text = row[1].strip()
+                raw_type = row[2].strip() if len(row) > 2 else 'Reminder Only'
+                inst_type = 'Validation Rule' if 'validation' in raw_type.lower() else 'Reminder Only'
+                raw_pri = (row[3].strip() if len(row) > 3 else 'Medium').capitalize()
+                priority = raw_pri if raw_pri in ('High', 'Medium', 'Low') else 'Medium'
+                category = row[4].strip() if len(row) > 4 else 'General'
+                j_name = row[5].strip() if len(row) > 5 else None
+
+                inst = JournalInstruction(
+                    journal_number=j_num,
+                    journal_name=j_name,
+                    category=category,
+                    instruction_text=text,
+                    type=inst_type,
+                    priority=priority,
+                    source=source,
+                    version=version,
+                    active=True,
+                    created_by=current_user.id
+                )
+                db.session.add(inst)
+                imported_count += 1
+
+    if imported_count > 0:
+        db.session.commit()
+        log_audit('IMPORT_XWIKI_JOURNAL_INSTRUCTIONS', 'JournalInstruction', None, None,
+                  f"Imported {imported_count} instructions from {source} (v{version}) by {current_user.name}")
+        db.session.commit()
+        flash(f'Successfully imported {imported_count} journal instruction(s) from {source} (v{version}).', 'success')
+    else:
+        flash('No valid journal instructions could be parsed from the provided input.', 'error')
+
+    return redirect(url_for('admin_journal_instructions'))
+
+# ─────────────────────────────────────────────
+# JOURNAL GUARD: IMAGE QUALITY CRITERIA (CRUD)
+# ─────────────────────────────────────────────
+
+@app.route('/admin/image-criteria')
+@login_required
+def admin_image_criteria():
+    if not is_admin() and current_user.role != 'team_leader':
+        abort(403)
+
+    journal_filter = request.args.get('journal', '').strip()
+    category_filter = request.args.get('category', '').strip()
+    status_filter = request.args.get('status', '').strip()
+
+    query = ImageCriterion.query
+    if journal_filter:
+        query = query.filter(ImageCriterion.journal_number.ilike(f'%{journal_filter}%'))
+    if category_filter:
+        query = query.filter_by(category=category_filter)
+    if status_filter == 'active':
+        query = query.filter_by(is_active=True)
+    elif status_filter == 'inactive':
+        query = query.filter_by(is_active=False)
+
+    criteria = query.order_by(ImageCriterion.journal_number, ImageCriterion.category).all()
+
+    total_count = ImageCriterion.query.count()
+    active_count = ImageCriterion.query.filter_by(is_active=True).count()
+    unique_journals = db.session.query(db.func.count(db.func.distinct(ImageCriterion.journal_number))).scalar() or 0
+
+    return render_template('image_criteria.html',
+                           criteria=criteria,
+                           total_count=total_count,
+                           active_count=active_count,
+                           unique_journals=unique_journals,
+                           journal_filter=journal_filter,
+                           category_filter=category_filter,
+                           status_filter=status_filter)
+
+
+@app.route('/admin/image-criteria/create', methods=['POST'])
+@login_required
+def create_image_criterion():
+    if not is_admin() and current_user.role != 'team_leader':
+        abort(403)
+
+    try:
+        journal_number = (request.form.get('journal_number') or 'ALL').strip().upper()
+        category = request.form.get('category') or 'Halftone / Photo'
+        min_dpi = int(request.form.get('min_dpi') or 300)
+        recommended_dpi = int(request.form.get('recommended_dpi') or min_dpi)
+        min_width_px = int(request.form.get('min_width_px') or 800)
+        min_height_px = int(request.form.get('min_height_px') or 600)
+        max_file_size_mb = float(request.form.get('max_file_size_mb') or 50.0)
+        allowed_color_modes = request.form.get('allowed_color_modes') or 'RGB, CMYK, Grayscale'
+        allowed_formats = request.form.get('allowed_formats') or 'TIFF, EPS, PNG, JPEG, PDF'
+        min_sharpness_score = float(request.form.get('min_sharpness_score') or 30.0)
+        notes = request.form.get('notes', '').strip()
+
+        criterion = ImageCriterion(
+            journal_number=journal_number,
+            category=category,
+            min_dpi=min_dpi,
+            recommended_dpi=recommended_dpi,
+            min_width_px=min_width_px,
+            min_height_px=min_height_px,
+            max_file_size_mb=max_file_size_mb,
+            allowed_color_modes=allowed_color_modes,
+            allowed_formats=allowed_formats,
+            min_sharpness_score=min_sharpness_score,
+            notes=notes,
+            is_active=True,
+            created_by=current_user.id
+        )
+        db.session.add(criterion)
+        db.session.commit()
+        log_audit('CREATE', 'ImageCriterion', criterion.id, None, f"Created {category} for Journal {journal_number}")
+        flash(f'Successfully created Image Criterion for Journal {journal_number} ({category}).', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Failed to create criterion: {str(e)}', 'error')
+
+    return redirect(url_for('admin_image_criteria'))
+
+
+@app.route('/admin/image-criteria/<int:criterion_id>/edit', methods=['POST'])
+@login_required
+def edit_image_criterion(criterion_id):
+    if not is_admin() and current_user.role != 'team_leader':
+        abort(403)
+
+    criterion = db.session.get(ImageCriterion, criterion_id)
+    if not criterion:
+        abort(404)
+
+    try:
+        old_val = json.dumps(criterion.to_dict())
+        criterion.journal_number = (request.form.get('journal_number') or criterion.journal_number).strip().upper()
+        criterion.category = request.form.get('category') or criterion.category
+        criterion.min_dpi = int(request.form.get('min_dpi') or criterion.min_dpi)
+        criterion.recommended_dpi = int(request.form.get('recommended_dpi') or criterion.recommended_dpi)
+        criterion.min_width_px = int(request.form.get('min_width_px') or criterion.min_width_px)
+        criterion.min_height_px = int(request.form.get('min_height_px') or criterion.min_height_px)
+        criterion.max_file_size_mb = float(request.form.get('max_file_size_mb') or criterion.max_file_size_mb)
+        criterion.allowed_color_modes = request.form.get('allowed_color_modes') or criterion.allowed_color_modes
+        criterion.allowed_formats = request.form.get('allowed_formats') or criterion.allowed_formats
+        criterion.min_sharpness_score = float(request.form.get('min_sharpness_score') or criterion.min_sharpness_score)
+        criterion.notes = request.form.get('notes', criterion.notes)
+        criterion.is_active = request.form.get('is_active') == 'true' or request.form.get('is_active') == '1' or 'is_active' in request.form
+
+        db.session.commit()
+        log_audit('EDIT', 'ImageCriterion', criterion.id, old_val, json.dumps(criterion.to_dict()))
+        flash('Image Criterion updated successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Failed to update criterion: {str(e)}', 'error')
+
+    return redirect(url_for('admin_image_criteria'))
+
+
+@app.route('/admin/image-criteria/<int:criterion_id>/toggle', methods=['POST'])
+@login_required
+def toggle_image_criterion(criterion_id):
+    if not is_admin() and current_user.role != 'team_leader':
+        abort(403)
+    criterion = db.session.get(ImageCriterion, criterion_id)
+    if not criterion:
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+
+    criterion.is_active = not criterion.is_active
+    db.session.commit()
+    log_audit('EDIT', 'ImageCriterion', criterion.id, None, f"Toggled is_active to {criterion.is_active}")
+    return jsonify({'success': True, 'is_active': criterion.is_active})
+
+
+@app.route('/admin/image-criteria/<int:criterion_id>/delete', methods=['POST'])
+@login_required
+def delete_image_criterion(criterion_id):
+    if not is_admin():
+        abort(403)
+    criterion = db.session.get(ImageCriterion, criterion_id)
+    if not criterion:
+        abort(404)
+
+    db.session.delete(criterion)
+    db.session.commit()
+    log_audit('DELETE', 'ImageCriterion', criterion_id, None, "Deleted ImageCriterion")
+    flash('Image Criterion deleted successfully.', 'success')
+    return redirect(url_for('admin_image_criteria'))
+
+
+@app.route('/admin/image-criteria/reset-defaults', methods=['POST'])
+@login_required
+def reset_image_criteria_defaults():
+    if not is_admin():
+        abort(403)
+    count = seed_default_image_criteria(db, ImageCriterion)
+    flash(f'Publishing image standards synced ({count} defaults).', 'success')
+    return redirect(url_for('admin_image_criteria'))
+
+
+# ─────────────────────────────────────────────
+# JOURNAL GUARD: FIGURE INSPECTION & OVERRIDE APIS
+# ─────────────────────────────────────────────
+
+@app.route('/api/manuscripts/<int:manuscript_id>/figures')
+@login_required
+def api_manuscript_figures(manuscript_id):
+    manuscript = db.session.get(Manuscript, manuscript_id)
+    if not manuscript:
+        return jsonify({'success': False, 'error': 'Manuscript not found'}), 404
+    return jsonify({
+        'success': True,
+        'figures': [f.to_dict() for f in manuscript.figures]
+    })
+
+
+@app.route('/api/figures/<int:figure_id>/override', methods=['POST'])
+@login_required
+def override_figure(figure_id):
+    fig = db.session.get(FigureInspection, figure_id)
+    if not fig:
+        return jsonify({'success': False, 'error': 'Figure not found'}), 404
+
+    reason = request.json.get('reason', '') if request.is_json else request.form.get('reason', '')
+    if not reason.strip():
+        return jsonify({'success': False, 'error': 'Approval/Override reason is required'}), 400
+
+    fig.status = 'OVERRIDDEN'
+    fig.override_reason = reason.strip()
+    fig.reviewed_by = current_user.id
+    fig.reviewed_at = datetime.utcnow()
+    db.session.commit()
+
+    log_audit('FIGURE_OVERRIDE', 'FigureInspection', fig.id, None, f"Overridden by {current_user.name}: {reason}")
+    return jsonify({'success': True, 'figure': fig.to_dict()})
+
+
+@app.route('/api/manuscripts/<int:manuscript_id>/recheck-figures', methods=['POST'])
+@login_required
+def recheck_manuscript_figures(manuscript_id):
+    manuscript = db.session.get(Manuscript, manuscript_id)
+    if not manuscript:
+        return jsonify({'success': False, 'error': 'Manuscript not found'}), 404
+
+    project = manuscript.project
+    journal_num = extract_journal_number(project, project.job_sheet)
+    criteria_list = ImageCriterion.query.filter(
+        ImageCriterion.is_active == True,
+        ImageCriterion.journal_number.in_([journal_num, 'ALL'])
+    ).all()
+    if not criteria_list:
+        criteria_list = ImageCriterion.query.filter_by(is_active=True).all()
+
+    text_callouts = find_figure_callouts(manuscript.working_text or manuscript.original_text)
+
+    updated_count = 0
+    for fig in manuscript.figures:
+        abs_p = os.path.join(basedir, fig.file_path.replace('/', os.sep))
+        if os.path.exists(abs_p):
+            insp = inspect_figure(abs_p, criteria_list=criteria_list, text_callouts=text_callouts, figure_label=fig.figure_label)
+            fig.format = insp['format']
+            fig.color_mode = insp['color_mode']
+            fig.dpi_x = insp['dpi_x']
+            fig.dpi_y = insp['dpi_y']
+            fig.pixel_width = insp['pixel_width']
+            fig.pixel_height = insp['pixel_height']
+            fig.print_width_inches = insp['print_width_inches']
+            fig.print_height_inches = insp['print_height_inches']
+            fig.file_size_kb = insp['file_size_kb']
+            fig.sharpness_score = insp['sharpness_score']
+            fig.is_blurry = insp['is_blurry']
+            if fig.status != 'OVERRIDDEN':
+                fig.status = insp['status']
+            fig.issues_json = json.dumps(insp['issues'])
+            fig.is_cited_in_text = insp['is_cited_in_text']
+            updated_count += 1
+
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'updated_count': updated_count,
+        'figures': [f.to_dict() for f in manuscript.figures]
+    })
+
+
+@app.route('/api/manuscripts/<int:manuscript_id>/upload-figure', methods=['POST'])
+@login_required
+def upload_manuscript_figure(manuscript_id):
+    manuscript = db.session.get(Manuscript, manuscript_id)
+    if not manuscript:
+        return jsonify({'success': False, 'error': 'Manuscript not found'}), 404
+
+    file = request.files.get('figure_file')
+    if not file or not file.filename:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    fig_output_dir = os.path.join(basedir, 'static', 'uploads', 'figures', str(manuscript.project_id))
+    idx = len(manuscript.figures) + 1
+    fig_data = save_uploaded_figure_file(file, fig_output_dir, figure_index=idx)
+
+    project = manuscript.project
+    journal_num = extract_journal_number(project, project.job_sheet)
+    criteria_list = ImageCriterion.query.filter(
+        ImageCriterion.is_active == True,
+        ImageCriterion.journal_number.in_([journal_num, 'ALL'])
+    ).all()
+    if not criteria_list:
+        criteria_list = ImageCriterion.query.filter_by(is_active=True).all()
+
+    text_callouts = find_figure_callouts(manuscript.working_text or manuscript.original_text)
+    custom_label = request.form.get('figure_label') or f"Figure {idx}"
+    insp = inspect_figure(fig_data['abs_file_path'], criteria_list=criteria_list, text_callouts=text_callouts, figure_label=custom_label)
+
+    fig_rec = FigureInspection(
+        manuscript_id=manuscript.id,
+        figure_label=custom_label,
+        original_filename=fig_data['original_filename'],
+        file_path=fig_data['file_path'],
+        thumbnail_path=fig_data.get('thumbnail_path'),
+        format=insp['format'],
+        color_mode=insp['color_mode'],
+        dpi_x=insp['dpi_x'],
+        dpi_y=insp['dpi_y'],
+        pixel_width=insp['pixel_width'],
+        pixel_height=insp['pixel_height'],
+        print_width_inches=insp['print_width_inches'],
+        print_height_inches=insp['print_height_inches'],
+        file_size_kb=insp['file_size_kb'],
+        sharpness_score=insp['sharpness_score'],
+        is_blurry=insp['is_blurry'],
+        status=insp['status'],
+        issues_json=json.dumps(insp['issues']),
+        is_cited_in_text=insp['is_cited_in_text']
+    )
+    db.session.add(fig_rec)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'figure': fig_rec.to_dict()
+    })
+
+
+@app.route('/download-app-zip')
+@login_required
+def download_app_zip():
+    """Package the latest Journal Guard application into a ZIP file and send directly to browser."""
+    import io
+    import zipfile
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    memory_file = io.BytesIO()
+    exclude_dirs = {'.git', '__pycache__', 'venv', '.env', '.pytest_cache'}
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(base_dir):
+            dirs[:] = [d for d in dirs if d not in exclude_dirs]
+            for file in files:
+                if file.endswith('.pyc') or file.endswith('.zip'):
+                    continue
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, base_dir)
+                zf.write(full_path, os.path.join('Journal_Guard', rel_path))
+    memory_file.seek(0)
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='Journal_Guard_App.zip'
+    )
+
+
+# ─────────────────────────────────────────────
 # ERROR HANDLERS
 # ─────────────────────────────────────────────
 
@@ -1322,4 +2350,4 @@ def not_found(e):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)

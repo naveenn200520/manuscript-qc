@@ -1,4 +1,6 @@
 .vercel
-.venv/ 
-__pycache__/ 
+.venv/
+__pycache__/
 qc_platform.db
+static/uploads/*
+!static/uploads/.gitkeep
