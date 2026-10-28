@@ -118,6 +118,42 @@ John Smith² and Jane Doe¹
     assert err['suggested_action'] == 'Restore the correct superscript affiliation number and mapping.'
     print(f"  ✓ Caught: {err['description']}")
 
+def test_xml_manuscript_comparison():
+    print("\nTesting XML manuscript comparison against clean edited Word manuscript...")
+    xml_doc = """<article>
+  <front>
+    <article-meta>
+      <title-group>
+        <article-title>Effects of Novel Therapeutic Compounds on Health Outcomes</article-title>
+      </title-group>
+      <contrib-group>
+        <contrib contrib-type="author">
+          <name><surname>Smith</surname><given-names>John</given-names></name>
+          <xref ref-type="aff">1,2</xref>
+        </contrib>
+      </contrib-group>
+      <aff id="aff1"><label>1</label>Department of Medicine, University A</aff>
+      <aff id="aff2"><label>2</label>Institute of Research, University B</aff>
+      <author-notes>
+        <corresp id="c1"><label>*</label>Corresponding author: John Smith, john.smith@university.edu</corresp>
+      </author-notes>
+    </article-meta>
+  </front>
+  <body>
+    <p>Body text mentioning treatment [1] and outcomes [2].</p>
+  </body>
+  <back>
+    <ref-list>
+      <ref id="r1"><label>1.</label><mixed-citation>Smith J. Medicine 2020.</mixed-citation></ref>
+      <ref id="r2"><label>2.</label><mixed-citation>Research B. Institute 2021.</mixed-citation></ref>
+    </ref-list>
+  </back>
+</article>"""
+
+    errors, rule_ids, run_log = run_critical_rules(xml_doc, CLEAN_ORIGINAL)
+    assert len(errors) == 0, f"Expected 0 errors comparing XML manuscript against clean DOCX, got {len(errors)}: {errors}"
+    print("  ✓ XML manuscript compared cleanly against edited file with 0 errors.")
+
 if __name__ == '__main__':
     print("=" * 60)
     print("STRICT VALIDATION OUTPUT POLICY & AFFILIATION TESTS")
@@ -129,6 +165,7 @@ if __name__ == '__main__':
     test_author_number_has_no_matching_affiliation()
     test_affiliation_number_has_no_matching_author()
     test_mapping_changed_from_original()
+    test_xml_manuscript_comparison()
     print("\n" + "=" * 60)
     print("ALL STRICT POLICY TESTS PASSED SUCCESSFULLY! ✓")
     print("=" * 60)

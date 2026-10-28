@@ -102,9 +102,9 @@ print("\nRun log:")
 for entry in run_log:
     print(f"  [{entry['status']}] {entry['rule_name']} — {entry['errors_found']} error(s) — triggered by: {entry['triggered_by']}")
 
-# Test author-year ordering
+# Test author-year ordering (name and year check disabled, sequence alone checked)
 print("\n" + "=" * 60)
-print("Testing author-year reference ordering...")
+print("Testing that reference author name and year are NOT checked...")
 print("=" * 60)
 
 ALPHA_TEXT = """Some manuscript text
@@ -121,9 +121,35 @@ alpha_instructions = [
 ]
 
 alpha_errors, alpha_ids, alpha_log = run_critical_rules(ORIGINAL, ALPHA_TEXT, alpha_instructions)
-print(f"Alpha order errors: {len(alpha_errors)}")
-for err in alpha_errors:
+alpha_ref_errors = [e for e in alpha_errors if e.get('field') == 'References']
+print(f"Alpha reference order errors (should be 0): {len(alpha_ref_errors)}")
+assert len(alpha_ref_errors) == 0, f"Expected 0 reference errors (name/year check disabled), got {len(alpha_ref_errors)}"
+print("  ✓ Reference author name and year correctly NOT checked.")
+
+# Test reference sequence check alone
+print("\n" + "=" * 60)
+print("Testing reference sequence check alone (numbered sequence & citation order)...")
+print("=" * 60)
+
+SEQ_MANUSCRIPT = """Study examining treatments cited in body text [2], and then [1].
+
+References
+[1] Anderson J. Cardiovascular studies. 2020.
+[2] Baker L. Platelet studies. 2021.
+[4] Davis R. Additional study. 2023.
+"""
+seq_instructions = [
+    MockInstruction('References', 'Sequential numbering'),
+]
+seq_errors, seq_ids, seq_log = run_critical_rules(ORIGINAL, SEQ_MANUSCRIPT, seq_instructions)
+seq_ref_errors = [e for e in seq_errors if e.get('field') == 'References']
+print(f"Sequence errors found: {len(seq_ref_errors)}")
+for err in seq_ref_errors:
     print(f"  {err['error_type']}: {err['description'][:100]}")
+# Should catch gap (missing 3) and citation order ([2] cited before [1])
+assert any(e['error_type'] == 'REFERENCE_NUMBER_GAP' for e in seq_ref_errors), "Expected REFERENCE_NUMBER_GAP"
+assert any(e['error_type'] == 'REFERENCE_CITATION_ORDER_INVALID' for e in seq_ref_errors), "Expected REFERENCE_CITATION_ORDER_INVALID"
+print("  ✓ Reference sequence (gaps, citation order) properly validated alone.")
 
 print("\n" + "=" * 60)
 print("ALL SMOKE TESTS PASSED ✓")

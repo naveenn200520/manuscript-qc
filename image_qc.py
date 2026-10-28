@@ -23,6 +23,7 @@ import json
 import zipfile
 import numpy as np
 from PIL import Image, ImageOps, ExifTags
+Image.MAX_IMAGE_PIXELS = None  # Allow processing large high-res figures without DecompressionBombError
 
 try:
     import cv2

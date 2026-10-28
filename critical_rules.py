@@ -128,18 +128,19 @@ def _extract_reference_entries(ref_text):
       [1]. Author ...
       1. Author ...
       1) Author ...
+      (1) Author ...
       1\tAuthor ...
       ¹ Author ...
     And filters out non-citation text like table rows.
     """
     entries = []
     num_pat = re.compile(
-        r'^[ \t]*(?:\[(\d{1,4})\][.\s]*|(\d{1,4})[.)\t]\s*)\s*(\S.+)',
+        r'^[ \t]*(?:\[(\d{1,4})\]|\((\d{1,4})\)|(\d{1,4})[.)\t])[.\s]*\s*(\S.+)',
         re.MULTILINE
     )
     for m in num_pat.finditer(ref_text):
-        num_str = m.group(1) or m.group(2)
-        content = m.group(3).strip()
+        num_str = m.group(1) or m.group(2) or m.group(3)
+        content = m.group(4).strip()
         alpha_count = sum(1 for c in content if c.isalpha())
         if len(content) < 15 or alpha_count < 10:
             continue
@@ -149,6 +150,29 @@ def _extract_reference_entries(ref_text):
             'offset': m.start(),
             'full_match': m.group(0),
         })
+
+    if not entries:
+        # Also check for superscript numbered references like: ¹ Author ... or [¹] Author ...
+        sup_pat = re.compile(
+            r'^[ \t]*(?:\[([¹²³⁴⁵⁶⁷⁸⁹⁰]{1,4})\]|([¹²³⁴⁵⁶⁷⁸⁹⁰]{1,4}))[.\s]*\s*(\S.+)',
+            re.MULTILINE
+        )
+        for m in sup_pat.finditer(ref_text):
+            raw = m.group(1) or m.group(2)
+            num_str = ''.join(SUPERSCRIPT_CHAR_MAP.get(c, c) for c in raw)
+            if not num_str.isdigit():
+                continue
+            content = m.group(3).strip()
+            alpha_count = sum(1 for c in content if c.isalpha())
+            if len(content) < 15 or alpha_count < 10:
+                continue
+            entries.append({
+                'number': int(num_str),
+                'text': content,
+                'offset': m.start(),
+                'full_match': m.group(0),
+            })
+
     return entries
 
 
@@ -1716,77 +1740,12 @@ def check_numbered_references(edited_text, original_text=None):
 RULE_ID_ALPHA_REF = 'REFERENCE_ALPHABETICAL_ORDER_INVALID'
 
 def check_author_year_reference_order(edited_text):
-    """Validate author-year references are in alphabetical order.
+    """Validate author-year reference order.
 
-    Sorting rules (per standard academic style):
-      1. Primary sort: first author's surname, A → Z
-      2. Single-author works first, then two-author, then three-or-more
-      3. Within the same author group, sort by publication year (oldest → newest)
+    Per requirement: In references, author name and publication year are NOT checked.
+    Reference validation checks sequence alone. Returns empty list.
     """
-    errors = []
-    if not edited_text:
-        return errors
-
-    ref_start, ref_section = _find_reference_section(edited_text)
-    if ref_section is None:
-        return errors
-
-    references = _extract_author_year_references_enhanced(ref_section)
-
-    if len(references) < 2:
-        return errors
-
-    # Build composite sort key: (surname, author_count, year)
-    def sort_key(ref):
-        return (ref['surname'], ref['author_count'], ref['year'])
-
-    # Check order
-    for i in range(1, len(references)):
-        prev = references[i - 1]
-        curr = references[i]
-        prev_key = sort_key(prev)
-        curr_key = sort_key(curr)
-
-        if prev_key > curr_key and prev_key[0] and curr_key[0]:
-            offset = ref_start + curr['offset']
-
-            # Build a human-readable explanation
-            if prev_key[0] != curr_key[0]:
-                detail = (
-                    f'"{curr["surname"].title()}" should come before '
-                    f'"{prev["surname"].title()}" (alphabetical order)'
-                )
-            elif prev_key[1] != curr_key[1]:
-                count_labels = {1: 'single-author', 2: 'two-author', 3: 'three-or-more-author'}
-                detail = (
-                    f'Same first author "{curr["surname"].title()}": '
-                    f'{count_labels.get(curr_key[1], "multi-author")} works should come before '
-                    f'{count_labels.get(prev_key[1], "multi-author")} works'
-                )
-            else:
-                detail = (
-                    f'Same author "{curr["surname"].title()}", year {curr["year"]} '
-                    f'should come before {prev["year"]}'
-                )
-
-            errors.append(_make_critical_error(
-                error_code=RULE_ID_ALPHA_REF,
-                original_value=f'Expected order: "{prev["surname"].title()}" then "{curr["surname"].title()}"',
-                current_value=curr['text'][:120],
-                page_or_line=None,
-                column_or_field='References',
-                rule_id=RULE_ID_ALPHA_REF,
-                suggested_action=(
-                    'Reorder references alphabetically by first author surname, '
-                    'then single-author → two-author → three-or-more, then by year'
-                ),
-                description=f'Reference order incorrect: {detail}.',
-                start_offset=offset,
-                end_offset=offset + min(len(curr['text']), 200),
-                full_text=edited_text,
-            ))
-
-    return errors
+    return []
 
 
 # ─────────────────────────────────────────────
@@ -1871,32 +1830,23 @@ def check_unnumbered_references(edited_text):
 
 
 def check_references(edited_text, job_sheet_instructions=None, original_text=None):
-    """Validate References rule group.
+    """Validate References rule group: sequence alone.
 
-    Supports numbered citation order, author-year alphabetical order,
-    and unnumbered references checks. All issues produced have Severity = Critical.
+    Per requirement: In references, author name and year are NOT checked.
+    Evaluates sequence alone:
+      - Sequential reference numbering (1, 2, 3...)
+      - No gaps in numbering
+      - No duplicate numbers
+      - References in ascending sequential order
+      - First-citation sequence in body text
+    All issues produced have Severity = Critical.
     """
     errors = []
     if not edited_text:
         return errors
 
-    style = _detect_citation_style_from_job_sheet(job_sheet_instructions)
-
-    if style == 'author_year':
-        errors.extend(check_author_year_reference_order(edited_text))
-    elif style == 'unnumbered':
-        errors.extend(check_unnumbered_references(edited_text))
-    elif style == 'numbered':
-        errors.extend(check_numbered_references(edited_text, original_text=original_text))
-    else:
-        # Auto-detect style from manuscript content
-        ref_start, ref_section = _find_reference_section(edited_text)
-        if ref_section:
-            has_numbers = bool(re.search(r'^[ \t]*\[?(\d+)\]?[.\):]?\s+', ref_section, re.MULTILINE))
-            if has_numbers:
-                errors.extend(check_numbered_references(edited_text, original_text=original_text))
-            else:
-                errors.extend(check_author_year_reference_order(edited_text))
+    # Check reference numbering sequence and citation order alone
+    errors.extend(check_numbered_references(edited_text, original_text=original_text))
 
     for e in errors:
         e['field'] = 'References'
@@ -1958,9 +1908,9 @@ CRITICAL_RULES_REGISTRY = {
         'id': 'REFERENCES_CHECK',
         'name': 'References',
         'severity': 'Critical',
-        'description': 'Sequential numbering / citation order / alphabetical order',
+        'description': 'Sequential numbering and citation order sequence alone (name and year check disabled)',
         'needs_original': False,
-        'keywords': ['reference', 'references', 'numbered references', 'citation', 'author-year'],
+        'keywords': ['reference', 'references', 'numbered references', 'citation'],
         'func': check_references,
     },
     # Aliases for backward compatibility
@@ -1986,7 +1936,7 @@ CRITICAL_RULES_REGISTRY = {
         'id': RULE_ID_ALPHA_REF,
         'name': 'Author–Year Reference Order',
         'severity': 'Critical',
-        'description': 'Alphabetical by surname → author count → year',
+        'description': 'Disabled (references validate sequence alone)',
         'needs_original': False,
         'keywords': ['alphabetical order', 'author-year'],
         'func': check_author_year_reference_order,
@@ -2021,18 +1971,8 @@ def _match_job_sheet_to_critical_rule(instruction_section, instruction_text):
     
     is_citation_instruction = ('citation' in combined or 'reference' in combined or has_author_year)
     if is_citation_instruction:
-        has_unnumbered = 'unnumbered' in combined
-        has_numbered = bool(re.search(r'(?<!un)numbered', combined))
-
-        if has_author_year:
-            matched_keys.append('author_year_references')
-            matched_keys.append('references')
-        if has_numbered:
-            matched_keys.append('numbered_references')
-            matched_keys.append('references')
-        if has_unnumbered and not has_numbered:
-            matched_keys.append('unnumbered_references')
-            matched_keys.append('references')
+        matched_keys.append('numbered_references')
+        matched_keys.append('references')
 
     for rule_key, rule_def in CRITICAL_RULES_REGISTRY.items():
         if rule_key in ('numbered_references', 'author_year_references', 'unnumbered_references'):
@@ -2045,6 +1985,150 @@ def _match_job_sheet_to_critical_rule(instruction_section, instruction_text):
                 break
 
     return matched_keys
+
+
+def normalize_manuscript_text(text):
+    """Normalize manuscript text. If text contains XML tags (e.g. JATS/NLM/PMC XML),
+    extract structured manuscript sections (Title, Authors with affiliations,
+    Affiliations, Corresponding Author, References) and strip XML markup.
+    """
+    if not text or not isinstance(text, str):
+        return text
+
+    xml_markers = ['<article', '<front', '<title-group', '<contrib-group', '<ref-list', '<article-title', '<?xml']
+    lower_head = text[:2000].lower()
+    if not ('<' in text and '>' in text and any(m in lower_head for m in xml_markers)):
+        return text
+
+    try:
+        import xml.etree.ElementTree as ET
+        clean_xml = re.sub(r'\sxmlns(?::\w+)?="[^"]*"', '', text)
+        root = ET.fromstring(clean_xml)
+
+        parts = []
+
+        # 1. Title
+        title_elem = None
+        for path in ['.//article-title', './/title-group/article-title', './/title']:
+            found = root.find(path)
+            if found is not None:
+                title_elem = found
+                break
+        if title_elem is not None:
+            title_text = ''.join(title_elem.itertext()).strip()
+            if title_text:
+                parts.append(title_text)
+                parts.append('')
+
+        # 2. Authors
+        contribs = root.findall('.//contrib')
+        authors = []
+        for c in contribs:
+            c_type = c.attrib.get('contrib-type', 'author')
+            if c_type not in ('author', 'editor') and contribs:
+                continue
+            surname = c.find('.//surname')
+            given = c.find('.//given-names')
+            name_elem = c.find('.//string-name') or c.find('.//name')
+
+            name_str = ''
+            if surname is not None and given is not None:
+                g_txt = (given.text or '').strip()
+                s_txt = (surname.text or '').strip()
+                name_str = f"{g_txt} {s_txt}".strip()
+            elif name_elem is not None:
+                name_str = ''.join(name_elem.itertext()).strip()
+
+            if not name_str:
+                continue
+
+            xrefs = c.findall('.//xref')
+            aff_nums = []
+            is_corr = c.attrib.get('corresp') == 'yes'
+            for x in xrefs:
+                r_type = x.attrib.get('ref-type', '')
+                txt = ''.join(x.itertext()).strip()
+                if r_type == 'aff' or (txt.isdigit() or all(ch in '0123456789,' for ch in txt)):
+                    aff_nums.append(txt)
+                if r_type == 'corresp' or '*' in txt:
+                    is_corr = True
+
+            if aff_nums:
+                clean_digits = ','.join(aff_nums)
+                sup_digits = ''.join(DIGIT_TO_SUPERSCRIPT.get(ch, ch) for ch in clean_digits)
+                name_str += sup_digits
+            if is_corr:
+                name_str += '*'
+
+            authors.append(name_str)
+
+        if authors:
+            parts.append(', '.join(authors))
+            parts.append('')
+
+        # 3. Affiliations
+        affs = root.findall('.//aff')
+        for aff in affs:
+            lbl = aff.find('.//label')
+            lbl_txt = ''.join(lbl.itertext()).strip() if lbl is not None else ''
+            aff_full = ''.join(aff.itertext()).strip()
+            if lbl_txt and aff_full.startswith(lbl_txt):
+                aff_full = aff_full[len(lbl_txt):].strip()
+            if lbl_txt:
+                sup_lbl = ''.join(DIGIT_TO_SUPERSCRIPT.get(ch, ch) for ch in lbl_txt)
+                parts.append(f"{sup_lbl} {aff_full}")
+            else:
+                parts.append(aff_full)
+        if affs:
+            parts.append('')
+
+        # 4. Corresponding info
+        corresp = root.find('.//author-notes/corresp')
+        if corresp is None:
+            corresp = root.find('.//corresp')
+        if corresp is not None:
+            parts.append(''.join(corresp.itertext()).strip())
+            parts.append('')
+        else:
+            em = root.find('.//email')
+            if em is not None and em.text:
+                parts.append(f"Corresponding author: {em.text.strip()}")
+                parts.append('')
+
+        # 5. Body
+        body = root.find('.//body')
+        if body is not None:
+            body_text = ''.join(body.itertext()).strip()
+            if body_text:
+                parts.append(body_text)
+                parts.append('')
+
+        # 6. References
+        refs = root.findall('.//ref-list/ref')
+        if not refs:
+            refs = root.findall('.//ref')
+        if refs:
+            parts.append('References')
+            for idx, r in enumerate(refs, 1):
+                lbl = r.find('.//label')
+                lbl_txt = ''.join(lbl.itertext()).strip() if lbl is not None else ''
+                cit = r.find('.//mixed-citation')
+                if cit is None:
+                    cit = r.find('.//element-citation')
+                if cit is not None:
+                    ref_txt = ''.join(cit.itertext()).strip()
+                else:
+                    ref_txt = ''.join(r.itertext()).strip()
+
+                if lbl_txt and ref_txt.startswith(lbl_txt):
+                    ref_txt = ref_txt[len(lbl_txt):].strip()
+                ref_num = lbl_txt.strip('.[]() ') or str(idx)
+                parts.append(f"[{ref_num}] {ref_txt}")
+
+        return '\n'.join(parts)
+    except Exception:
+        clean = re.sub(r'<[^>]+>', ' ', text)
+        return re.sub(r'[ \t]+', ' ', clean).strip()
 
 
 def run_critical_rules(original_text, edited_text, job_sheet_instructions=None):
@@ -2063,6 +2147,10 @@ def run_critical_rules(original_text, edited_text, job_sheet_instructions=None):
     Returns:
       (errors_list, active_rule_ids, rule_run_log)
     """
+    # Normalize XML manuscripts (e.g. JATS/NLM/PMC XML) into clean manuscript text
+    original_text = normalize_manuscript_text(original_text)
+    edited_text = normalize_manuscript_text(edited_text)
+
     errors = []
     active_rule_ids = []
     rule_run_log = []
