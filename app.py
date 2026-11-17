@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, sen
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from sqlalchemy import and_, or_
 from models import (db, User, Team, UserTeam, StyleRule, RuleSection, RuleVersion,
                     UserPermission, ReferenceStyle, ReferenceRule,
                     Project, Manuscript, ErrorRecord, JobSheet, JobSheetInstruction,
@@ -20,9 +21,11 @@ import tempfile
 import mammoth
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'super-secret-manuscript-key-123'
-app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # Support up to 1 GB file uploads
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'local-development-secret-change-before-deploy')
+app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_UPLOAD_BYTES', str(1024 * 1024 * 1024)))
 basedir = os.path.abspath(os.path.dirname(__file__))
+data_dir = os.environ.get('JOURNAL_GUARD_DATA_DIR', basedir)
+os.makedirs(data_dir, exist_ok=True)
 import shutil
 db_uri = os.environ.get('DATABASE_URL')
 if db_uri:
@@ -40,7 +43,7 @@ elif os.environ.get('VERCEL') == '1':
         'connect_args': {'timeout': 20}
     }
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'qc_platform.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(data_dir, 'qc_platform.db')
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'connect_args': {'timeout': 20}
     }
@@ -68,7 +71,6 @@ ALLOWED_CRITICAL_CODES = [
     'REFERENCE_NUMBER_GAP',
     'REFERENCE_NUMBER_OUT_OF_ORDER',
     'REFERENCE_CITATION_ORDER_INVALID',
-    'REFERENCE_ALPHABETICAL_ORDER_INVALID',
     'UNNUMBERED_REFERENCE_HAS_NUMBER',
     'SECTION_HEADING_HAS_NUMBER',
 ]
@@ -282,54 +284,59 @@ DEFAULT_SECTIONS = [
 ]
 
 def init_db():
-    with app.app_context():
-        db.create_all()
-        # Seed sections
-        for s in DEFAULT_SECTIONS:
-            if not RuleSection.query.filter_by(name=s).first():
-                db.session.add(RuleSection(name=s))
-        db.session.commit()
-
-        if not User.query.filter_by(email='admin@qcplatform.com').first():
-            admin = User(name='Admin User', email='admin@qcplatform.com',
-                         password_hash=generate_password_hash('password123'), role='admin')
-            db.session.add(admin)
-            team = Team(name='Default Journal', description='Primary journal editing team')
-            db.session.add(team)
-            db.session.commit()
-            db.session.add(UserTeam(user_id=admin.id, team_id=team.id))
-            db.session.add(StyleRule(team_id=team.id, name='Figure Abbreviation',
-                                     category='Style', rule_type='Text Replacement',
-                                     section='Abbreviations', scope='Figure',
-                                     find_pattern='Figure', replacement='Fig.',
-                                     severity='Style', priority='Medium', status='Active'))
-            db.session.add(StyleRule(team_id=team.id, name='Table Abbreviation',
-                                     category='Style', rule_type='Text Replacement',
-                                     section='Abbreviations', scope='Table',
-                                     find_pattern='Table', replacement='Tab.',
-                                     severity='Style', priority='Medium', status='Active'))
+    try:
+        with app.app_context():
+            db.create_all()
+            # Seed sections
+            for s in DEFAULT_SECTIONS:
+                if not RuleSection.query.filter_by(name=s).first():
+                    db.session.add(RuleSection(name=s))
             db.session.commit()
 
-        if ReferenceStyle.query.count() == 0:
-            admin_user = User.query.filter_by(role='admin').first()
-            admin_id = admin_user.id if admin_user else 1
+            if not User.query.filter_by(email='admin@qcplatform.com').first():
+                admin = User(name='Admin User', email='admin@qcplatform.com',
+                             password_hash=generate_password_hash('password123'), role='admin')
+                db.session.add(admin)
+                team = Team(name='Default Journal', description='Primary journal editing team')
+                db.session.add(team)
+                db.session.commit()
+                db.session.add(UserTeam(user_id=admin.id, team_id=team.id))
+                db.session.add(StyleRule(team_id=team.id, name='Figure Abbreviation',
+                                         category='Style', rule_type='Text Replacement',
+                                         section='Abbreviations', scope='Figure',
+                                         find_pattern='Figure', replacement='Fig.',
+                                         severity='Style', priority='Medium', status='Active'))
+                db.session.add(StyleRule(team_id=team.id, name='Table Abbreviation',
+                                         category='Style', rule_type='Text Replacement',
+                                         section='Abbreviations', scope='Table',
+                                         find_pattern='Table', replacement='Tab.',
+                                         severity='Style', priority='Medium', status='Active'))
+                db.session.commit()
 
-            vancouver = ReferenceStyle(name='Vancouver', description='Numbered citation style according to order of appearance in text.', is_active=True, created_by=admin_id)
-            db.session.add(vancouver)
-            db.session.commit()
-            db.session.add(ReferenceRule(ref_style_id=vancouver.id, category='Citation numbering', rule_text='References must be numbered consecutively in order of first appearance.'))
-            db.session.add(ReferenceRule(ref_style_id=vancouver.id, category='DOI', rule_text='Include DOI when available.'))
+            if ReferenceStyle.query.count() == 0:
+                admin_user = User.query.filter_by(role='admin').first()
+                admin_id = admin_user.id if admin_user else 1
 
-            harvard = ReferenceStyle(name='Harvard', description='Author-year alphabetical reference style.', is_active=True, created_by=admin_id)
-            db.session.add(harvard)
-            db.session.commit()
-            db.session.add(ReferenceRule(ref_style_id=harvard.id, category='Author format', rule_text='References listed alphabetically by primary author surname.'))
+                vancouver = ReferenceStyle(name='Vancouver', description='Numbered citation style according to order of appearance in text.', is_active=True, created_by=admin_id)
+                db.session.add(vancouver)
+                db.session.commit()
+                db.session.add(ReferenceRule(ref_style_id=vancouver.id, category='Citation numbering', rule_text='References must be numbered consecutively in order of first appearance.'))
+                db.session.add(ReferenceRule(ref_style_id=vancouver.id, category='DOI', rule_text='Include DOI when available.'))
 
-            apa = ReferenceStyle(name='APA 7th', description='American Psychological Association reference style.', is_active=True, created_by=admin_id)
-            db.session.add(apa)
-            db.session.commit()
-            db.session.add(ReferenceRule(ref_style_id=apa.id, category='Author format', rule_text='Author surname followed by initials and publication year.'))
-            db.session.commit()
+                harvard = ReferenceStyle(name='Harvard', description='Author-year alphabetical reference style.', is_active=True, created_by=admin_id)
+                db.session.add(harvard)
+                db.session.commit()
+                db.session.add(ReferenceRule(ref_style_id=harvard.id, category='Author format', rule_text='References listed alphabetically by primary author surname.'))
+
+                apa = ReferenceStyle(name='APA 7th', description='American Psychological Association reference style.', is_active=True, created_by=admin_id)
+                db.session.add(apa)
+                db.session.commit()
+                db.session.add(ReferenceRule(ref_style_id=apa.id, category='Author format', rule_text='Author surname followed by initials and publication year.'))
+                db.session.commit()
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+        import traceback
+        traceback.print_exc()
 
 init_db()
 
@@ -359,6 +366,15 @@ def logout():
 @app.route('/manifest.json')
 def manifest():
     return send_file(os.path.join(basedir, 'static', 'manifest.json'), mimetype='application/manifest+json')
+
+@app.route('/healthz')
+def health_check():
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'ok'})
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'unavailable'}), 503
 
 @app.route('/sw.js')
 def service_worker():
@@ -1605,10 +1621,23 @@ def manage_user_access(user_id):
 @app.route('/admin/audit-logs')
 @login_required
 def audit_logs():
-    if not is_admin():
+    if not is_admin() and current_user.role != 'team_leader':
         abort(403)
-    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(500).all()
-    return render_template('audit_logs.html', logs=logs)
+
+    query = AuditLog.query
+    if not is_admin():
+        team_ids = get_user_team_ids()
+        project_ids = db.session.query(Project.id).filter(Project.team_id.in_(team_ids))
+        related_error_ids = db.session.query(ErrorRecord.id).join(Manuscript).filter(
+            Manuscript.project_id.in_(project_ids)
+        )
+        query = query.filter(or_(
+            and_(AuditLog.object_type == 'Project', AuditLog.object_id.in_(project_ids)),
+            and_(AuditLog.object_type == 'ErrorRecord', AuditLog.object_id.in_(related_error_ids)),
+        ))
+
+    logs = query.order_by(AuditLog.timestamp.desc()).limit(500).all()
+    return render_template('audit_logs.html', logs=logs, is_admin=is_admin())
 
 # ─────────────────────────────────────────────
 # JOURNAL INSTRUCTION LIBRARY (API & ADMIN)
@@ -2346,7 +2375,26 @@ def forbidden(e):
 
 @app.errorhandler(404)
 def not_found(e):
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({'error': 'Not found'}), 404
     return render_template('404.html'), 404
+
+@app.errorhandler(413)
+def request_entity_too_large(e):
+    max_upload_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    message = f'Upload exceeds the maximum request size of {max_upload_mb} MB.'
+    if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': False, 'error': message}), 413
+    return render_template('413.html', max_upload_mb=max_upload_mb), 413
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    flash('An internal server error occurred. Please try again or contact support.', 'error')
+    return redirect(url_for('dashboard'))
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_file(os.path.join(basedir, 'static', 'images', 'app_icon.ico'), mimetype='image/vnd.microsoft.icon')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
