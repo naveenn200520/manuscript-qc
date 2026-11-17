@@ -1353,13 +1353,17 @@ def admin_users():
                 log_audit('CREATE', 'User', new_user.id, None, name)
                 db.session.commit()
                 flash('User registered successfully.', 'success')
-            except Exception:
+            except Exception as e:
                 db.session.rollback()
-                flash('Error creating user. Employee Code or Email might already exist.', 'error')
+                flash(f'Error creating user: {str(e)}', 'error')
         return redirect(url_for('admin_users'))
-    users = User.query.all()
-    teams = Team.query.all()
-    return render_template('admin_users.html', users=users, teams=teams)
+    try:
+        users = User.query.all()
+        teams = Team.query.all()
+        return render_template('admin_users.html', users=users, teams=teams)
+    except Exception as e:
+        flash(f'Error loading users: {str(e)}', 'error')
+        return render_template('admin_users.html', users=[], teams=[])
 
 # ─────────────────────────────────────────────
 # STYLE RULES (admin full CRUD; others read-only)
