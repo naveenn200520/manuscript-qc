@@ -13,7 +13,7 @@ from models import (db, User, Team, UserTeam, StyleRule, RuleSection, RuleVersio
                     ImageCriterion, FigureInspection)
 from qc_engine import run_content_qc, restore_original
 from job_sheet_parser import parse_job_sheet
-from critical_rules import run_critical_rules, CRITICAL_RULES_REGISTRY
+from critical_rules import run_critical_rules, normalize_manuscript_text, CRITICAL_RULES_REGISTRY
 from image_qc import (extract_figures_from_docx, save_uploaded_figure_file,
                       inspect_figure, find_figure_callouts, seed_default_image_criteria,
                       process_manuscript_figures)
@@ -63,6 +63,7 @@ ALLOWED_CRITICAL_CODES = [
     'AFFILIATION_SUPERSCRIPT_INVALID',
     'CORRESPONDING_AUTHOR_NAME_CHANGED',
     'CORRESPONDING_AUTHOR_NAME_MISSING',
+    'CORRESPONDING_AUTHOR_NAME_MISMATCH',
     'CORRESPONDING_AUTHOR_ASTERISK_MISSING',
     'EMAIL_MISSING',
     'EMAIL_INVALID',
@@ -423,9 +424,16 @@ def projects():
 @login_required
 def new_project():
     teams = current_user.teams if not is_admin() else Team.query.all()
+    if not teams:
+        flash('Your account is not assigned to a team. Ask an administrator to assign you to the team that owns the project.', 'error')
+        return redirect(url_for('projects'))
     if request.method == 'POST':
         name = request.form.get('name')
-        team_id = int(request.form.get('team_id'))
+        try:
+            team_id = int(request.form.get('team_id', ''))
+        except (TypeError, ValueError):
+            flash('Select a valid team before creating a project.', 'error')
+            return redirect(url_for('new_project'))
 
         # Enforce team membership for non-admins
         if not is_admin() and team_id not in get_user_team_ids():
@@ -556,14 +564,25 @@ def new_project():
                     # 4. Fallback in case raw text/XML was saved with a .pdf extension
                     try:
                         file_obj.seek(0)
-                        raw = file_obj.read().decode('utf-8', errors='ignore')
-                        if raw.strip().startswith('<') or len(raw.strip()) > 30:
-                            return raw
+                        raw_bytes = file_obj.read()
+                        if not raw_bytes.lstrip(b'\xef\xbb\xbf \t\r\n').startswith(b'%PDF-'):
+                            try:
+                                raw = raw_bytes.decode('utf-8')
+                            except UnicodeDecodeError:
+                                raw = ''
+                            if raw.strip().startswith('<') or len(raw.strip()) > 30:
+                                return raw
                     except Exception:
                         pass
             except Exception:
                 pass
             return None
+
+        def upload_error(message):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': message}), 400
+            flash(message, 'error')
+            return redirect(url_for('new_project'))
 
         # Check if text was pre-extracted on client-side (for instant upload of large docx files)
         author_text = request.form.get('author_extracted_text')
@@ -572,16 +591,21 @@ def new_project():
             author_text = extract_text(file)
 
         if not author_text or not author_text.strip():
-            err_msg = 'No author file content provided or file could not be read.'
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-                return jsonify({'success': False, 'error': err_msg}), 400
-            flash(err_msg, 'error')
-            return redirect(request.url)
+            return upload_error('No readable author manuscript content was found in the uploaded file.')
+
+        if not normalize_manuscript_text(author_text).strip():
+            return upload_error('The author manuscript contains no readable text for QC.')
 
         my_text = request.form.get('edited_extracted_text')
+        final_file = request.files.get('xml_file')
         if not my_text or not my_text.strip():
-            my_file = request.files.get('xml_file')
-            my_text = extract_text(my_file)
+            my_text = extract_text(final_file)
+
+        has_final_file = bool(final_file and final_file.filename)
+        if has_final_file and (not my_text or not my_text.strip()):
+            return upload_error('The final manuscript file could not be read. Upload a text-based supported file or provide a text-extractable PDF.')
+        if has_final_file and not normalize_manuscript_text(my_text).strip():
+            return upload_error('The final manuscript contains no readable text for QC.')
 
         if not name or not str(name).strip():
             m_file = request.files.get('manuscript_file')
@@ -772,14 +796,15 @@ def review_project(project_id):
     # 3. Existing records for this manuscript to preserve resolved/approved status
     existing_records = ErrorRecord.query.filter_by(manuscript_id=manuscript.id).all()
     preserved_status = {}
-    type_status = {}
-    all_previously_resolved = bool(existing_records) and all(r.status != 'OPEN' for r in existing_records)
     for r in existing_records:
-        key = (r.error_type, (r.description or '').strip())
+        key = (
+            r.error_type,
+            (r.description or '').strip(),
+            r.original_text or '',
+            r.edited_text or '',
+        )
         if r.status != 'OPEN':
             preserved_status[key] = r.status
-            if r.error_type not in type_status:
-                type_status[r.error_type] = r.status
 
     # Normalize any carriage returns in existing manuscript text
     if manuscript.original_text and '\r' in manuscript.original_text:
@@ -825,14 +850,13 @@ def review_project(project_id):
     for err_dict in critical_errors:
         ln, col = calc_line_col(manuscript.working_text, err_dict.get('start_offset'))
         desc_clean = (err_dict.get('description') or '').strip()
-        key = (err_dict['error_type'], desc_clean)
-        st = preserved_status.get(key)
-        if not st:
-            st = type_status.get(err_dict['error_type'])
-        if not st and all_previously_resolved:
-            st = 'IGNORED'
-        if not st:
-            st = 'OPEN'
+        key = (
+            err_dict['error_type'],
+            desc_clean,
+            err_dict.get('original_text') or '',
+            err_dict.get('edited_text') or '',
+        )
+        st = preserved_status.get(key, 'OPEN')
         new_err = ErrorRecord(
             manuscript_id=manuscript.id,
             error_type=err_dict['error_type'],
@@ -1346,9 +1370,9 @@ def admin_users():
                 new_user = User(name=name, email=email, employee_code=employee_code,
                                 password_hash=generate_password_hash(password), role=role)
                 db.session.add(new_user)
-                db.session.commit()
-                for tid in team_ids:
-                    db.session.add(UserTeam(user_id=new_user.id, team_id=tid))
+                db.session.flush()
+                for team_id in selected_team_ids:
+                    db.session.add(UserTeam(user_id=new_user.id, team_id=team_id))
                 db.session.commit()
                 log_audit('CREATE', 'User', new_user.id, None, name)
                 db.session.commit()
@@ -1361,6 +1385,21 @@ def admin_users():
         users = User.query.all()
         teams = Team.query.all()
         return render_template('admin_users.html', users=users, teams=teams)
+        try:
+            selected_team_ids = {int(team_id) for team_id in team_ids}
+        except (TypeError, ValueError):
+            flash('Invalid team selection. Choose one or more valid teams.', 'error')
+            return redirect(url_for('admin_users'))
+
+        if not selected_team_ids:
+            flash('Assign the user to at least one team so they can access that team’s projects.', 'error')
+            return redirect(url_for('admin_users'))
+
+        selected_teams = Team.query.filter(Team.id.in_(selected_team_ids)).all()
+        if len(selected_teams) != len(selected_team_ids):
+            flash('One or more selected teams are no longer available. Choose valid teams and try again.', 'error')
+            return redirect(url_for('admin_users'))
+
     except Exception as e:
         flash(f'Error loading users: {str(e)}', 'error')
         return render_template('admin_users.html', users=[], teams=[])

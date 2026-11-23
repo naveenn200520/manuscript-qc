@@ -84,6 +84,7 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Assign Teams</label>
                             <div class="space-y-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                            <p class="text-xs text-slate-500 mb-2">Select at least one team. Users can only view and run projects for their assigned teams.</p>
                                 {% for team in teams %}
                                 <label class="flex items-center gap-2">
                                     <input type="checkbox" name="team_ids" value="{{ team.id }}" class="rounded text-brand-600 focus:ring-brand-500">
@@ -91,6 +92,9 @@
                                 </label>
                                 {% endfor %}
                             </div>
+                                {% if not teams %}
+                                <p class="text-sm text-red-600">No teams exist yet. Create a team before registering a user.</p>
+                                {% endif %}
                         </div>
                         <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white px-4 py-3 rounded-lg font-medium shadow shadow-brand-500/20 transition-colors mt-4">
                             Register User

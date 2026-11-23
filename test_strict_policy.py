@@ -156,6 +156,32 @@ def test_xml_manuscript_comparison():
 
 if __name__ == '__main__':
     print("=" * 60)
+def test_xml_with_unrecognized_layout_is_still_checked():
+    original = """A Correct Title
+
+Jane Doe
+
+Department A
+
+Corresponding author: jane@example.org
+
+References
+[1] Doe J. Example 2020.
+"""
+    edited_xml = """<?xml version="1.0"?>
+<manuscript>
+  <meta>
+    <custom-title>A Changed Title</custom-title>
+    <creator>Jane Doe</creator>
+  </meta>
+  <content>Body text.</content>
+</manuscript>"""
+
+    errors, _, _ = run_critical_rules(original, edited_xml)
+    assert any(error['error_type'] == 'ARTICLE_TITLE_CHANGED' for error in errors), (
+        f"Expected changed XML title to be detected, got: {errors}"
+    )
+
     print("STRICT VALIDATION OUTPUT POLICY & AFFILIATION TESTS")
     print("=" * 60)
     test_clean_manuscript()
@@ -168,4 +194,5 @@ if __name__ == '__main__':
     test_xml_manuscript_comparison()
     print("\n" + "=" * 60)
     print("ALL STRICT POLICY TESTS PASSED SUCCESSFULLY! ✓")
+    test_xml_with_unrecognized_layout_is_still_checked()
     print("=" * 60)

@@ -1995,22 +1995,34 @@ def normalize_manuscript_text(text):
     if not text or not isinstance(text, str):
         return text
 
-    xml_markers = ['<article', '<front', '<title-group', '<contrib-group', '<ref-list', '<article-title', '<?xml']
     lower_head = text[:2000].lower()
-    if not ('<' in text and '>' in text and any(m in lower_head for m in xml_markers)):
+    xml_markers = ['<article', '<front', '<title-group', '<contrib-group', '<ref-list', '<article-title', '<?xml']
+    if not ('<' in text and '>' in text and (
+        any(marker in lower_head for marker in xml_markers)
+        or re.search(r'<[a-z_][\w.:-]*(?:\s|>)', lower_head)
+    )):
         return text
 
     try:
         import xml.etree.ElementTree as ET
-        clean_xml = re.sub(r'\sxmlns(?::\w+)?="[^"]*"', '', text)
-        root = ET.fromstring(clean_xml)
+        root = ET.fromstring(text)
+
+        def find_all(parent, tag_name):
+            return [
+                element for element in parent.iter()
+                if isinstance(element.tag, str)
+                and element.tag.rsplit('}', 1)[-1].split(':')[-1] == tag_name
+            ]
+
+        def find_first(parent, tag_name):
+            return next(iter(find_all(parent, tag_name)), None)
 
         parts = []
 
         # 1. Title
         title_elem = None
-        for path in ['.//article-title', './/title-group/article-title', './/title']:
-            found = root.find(path)
+        for tag_name in ('article-title', 'title'):
+            found = find_first(root, tag_name)
             if found is not None:
                 title_elem = found
                 break
@@ -2021,15 +2033,17 @@ def normalize_manuscript_text(text):
                 parts.append('')
 
         # 2. Authors
-        contribs = root.findall('.//contrib')
+        contribs = find_all(root, 'contrib')
         authors = []
         for c in contribs:
             c_type = c.attrib.get('contrib-type', 'author')
             if c_type not in ('author', 'editor') and contribs:
                 continue
-            surname = c.find('.//surname')
-            given = c.find('.//given-names')
-            name_elem = c.find('.//string-name') or c.find('.//name')
+            surname = find_first(c, 'surname')
+            given = find_first(c, 'given-names')
+            name_elem = find_first(c, 'string-name')
+            if name_elem is None:
+                name_elem = find_first(c, 'name')
 
             name_str = ''
             if surname is not None and given is not None:
@@ -2042,7 +2056,7 @@ def normalize_manuscript_text(text):
             if not name_str:
                 continue
 
-            xrefs = c.findall('.//xref')
+            xrefs = find_all(c, 'xref')
             aff_nums = []
             is_corr = c.attrib.get('corresp') == 'yes'
             for x in xrefs:
@@ -2067,9 +2081,9 @@ def normalize_manuscript_text(text):
             parts.append('')
 
         # 3. Affiliations
-        affs = root.findall('.//aff')
+        affs = find_all(root, 'aff')
         for aff in affs:
-            lbl = aff.find('.//label')
+            lbl = find_first(aff, 'label')
             lbl_txt = ''.join(lbl.itertext()).strip() if lbl is not None else ''
             aff_full = ''.join(aff.itertext()).strip()
             if lbl_txt and aff_full.startswith(lbl_txt):
@@ -2083,20 +2097,21 @@ def normalize_manuscript_text(text):
             parts.append('')
 
         # 4. Corresponding info
-        corresp = root.find('.//author-notes/corresp')
+        author_notes = find_first(root, 'author-notes')
+        corresp = find_first(author_notes, 'corresp') if author_notes is not None else None
         if corresp is None:
-            corresp = root.find('.//corresp')
+            corresp = find_first(root, 'corresp')
         if corresp is not None:
             parts.append(''.join(corresp.itertext()).strip())
             parts.append('')
         else:
-            em = root.find('.//email')
+            em = find_first(root, 'email')
             if em is not None and em.text:
                 parts.append(f"Corresponding author: {em.text.strip()}")
                 parts.append('')
 
         # 5. Body
-        body = root.find('.//body')
+        body = find_first(root, 'body')
         if body is not None:
             body_text = ''.join(body.itertext()).strip()
             if body_text:
@@ -2104,17 +2119,18 @@ def normalize_manuscript_text(text):
                 parts.append('')
 
         # 6. References
-        refs = root.findall('.//ref-list/ref')
+        ref_list = find_first(root, 'ref-list')
+        refs = find_all(ref_list, 'ref') if ref_list is not None else []
         if not refs:
-            refs = root.findall('.//ref')
+            refs = find_all(root, 'ref')
         if refs:
             parts.append('References')
             for idx, r in enumerate(refs, 1):
-                lbl = r.find('.//label')
+                lbl = find_first(r, 'label')
                 lbl_txt = ''.join(lbl.itertext()).strip() if lbl is not None else ''
-                cit = r.find('.//mixed-citation')
+                cit = find_first(r, 'mixed-citation')
                 if cit is None:
-                    cit = r.find('.//element-citation')
+                    cit = find_first(r, 'element-citation')
                 if cit is not None:
                     ref_txt = ''.join(cit.itertext()).strip()
                 else:
@@ -2125,7 +2141,11 @@ def normalize_manuscript_text(text):
                 ref_num = lbl_txt.strip('.[]() ') or str(idx)
                 parts.append(f"[{ref_num}] {ref_txt}")
 
-        return '\n'.join(parts)
+        normalized = '\n'.join(parts)
+        if normalized.strip():
+            return normalized
+
+        return '\n'.join(segment.strip() for segment in root.itertext() if segment.strip())
     except Exception:
         clean = re.sub(r'<[^>]+>', ' ', text)
         return re.sub(r'[ \t]+', ' ', clean).strip()

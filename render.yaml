@@ -3,10 +3,19 @@ services:
     name: manuscript-qc
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 2 --timeout 300 -b 0.0.0.0:$PORT app:app
-    plan: free
+    startCommand: gunicorn --worker-class gthread --workers 1 --threads 4 --timeout 900 -b 0.0.0.0:$PORT app:app
+    plan: 2c-4g
+    healthCheckPath: /healthz
+    disk:
+      name: manuscript-qc-data
+      mountPath: /opt/render/project/src/static/uploads
+      sizeGB: 10
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: FLASK_SECRET_KEY
         generateValue: true
+      - key: JOURNAL_GUARD_DATA_DIR
+        value: /opt/render/project/src/static/uploads
+      - key: MAX_UPLOAD_BYTES
+        value: 1073741824
