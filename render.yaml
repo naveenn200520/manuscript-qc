@@ -8,7 +8,7 @@ services:
     healthCheckPath: /healthz
     disk:
       name: manuscript-qc-data
-      mountPath: /opt/render/project/src/static/uploads
+      mountPath: /var/data
       sizeGB: 10
     envVars:
       - key: PYTHON_VERSION
@@ -16,6 +16,8 @@ services:
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: JOURNAL_GUARD_DATA_DIR
-        value: /opt/render/project/src/static/uploads
+        value: /var/data
+      - key: JOURNAL_GUARD_UPLOAD_DIR
+        value: /var/data/uploads
       - key: MAX_UPLOAD_BYTES
         value: 1073741824

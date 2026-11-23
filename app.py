@@ -26,6 +26,21 @@ app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_UPLOAD_BYTES', str(10
 basedir = os.path.abspath(os.path.dirname(__file__))
 data_dir = os.environ.get('JOURNAL_GUARD_DATA_DIR', basedir)
 os.makedirs(data_dir, exist_ok=True)
+upload_dir = os.environ.get('JOURNAL_GUARD_UPLOAD_DIR')
+if upload_dir:
+    os.makedirs(upload_dir, exist_ok=True)
+    static_upload_dir = os.path.join(basedir, 'static', 'uploads')
+    os.makedirs(os.path.dirname(static_upload_dir), exist_ok=True)
+    if os.path.lexists(static_upload_dir):
+        if (
+            not os.path.islink(static_upload_dir)
+            or os.path.realpath(static_upload_dir) != os.path.realpath(upload_dir)
+        ):
+            raise RuntimeError(
+                'The static uploads path must be a symlink to JOURNAL_GUARD_UPLOAD_DIR.'
+            )
+    else:
+        os.symlink(upload_dir, static_upload_dir, target_is_directory=True)
 import shutil
 db_uri = os.environ.get('DATABASE_URL')
 if db_uri:
