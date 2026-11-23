@@ -1380,6 +1380,21 @@ def admin_users():
         password = request.form.get('password')
         role = request.form.get('role')
         team_ids = request.form.getlist('team_ids')
+        try:
+            selected_team_ids = {int(team_id) for team_id in team_ids}
+        except (TypeError, ValueError):
+            flash('Invalid team selection. Choose one or more valid teams.', 'error')
+            return redirect(url_for('admin_users'))
+
+        if not selected_team_ids:
+            flash('Assign the user to at least one team so they can access that team’s projects.', 'error')
+            return redirect(url_for('admin_users'))
+
+        selected_teams = Team.query.filter(Team.id.in_(selected_team_ids)).all()
+        if len(selected_teams) != len(selected_team_ids):
+            flash('One or more selected teams are no longer available. Choose valid teams and try again.', 'error')
+            return redirect(url_for('admin_users'))
+
         if name and email and employee_code and password:
             try:
                 new_user = User(name=name, email=email, employee_code=employee_code,
@@ -1400,21 +1415,6 @@ def admin_users():
         users = User.query.all()
         teams = Team.query.all()
         return render_template('admin_users.html', users=users, teams=teams)
-        try:
-            selected_team_ids = {int(team_id) for team_id in team_ids}
-        except (TypeError, ValueError):
-            flash('Invalid team selection. Choose one or more valid teams.', 'error')
-            return redirect(url_for('admin_users'))
-
-        if not selected_team_ids:
-            flash('Assign the user to at least one team so they can access that team’s projects.', 'error')
-            return redirect(url_for('admin_users'))
-
-        selected_teams = Team.query.filter(Team.id.in_(selected_team_ids)).all()
-        if len(selected_teams) != len(selected_team_ids):
-            flash('One or more selected teams are no longer available. Choose valid teams and try again.', 'error')
-            return redirect(url_for('admin_users'))
-
     except Exception as e:
         flash(f'Error loading users: {str(e)}', 'error')
         return render_template('admin_users.html', users=[], teams=[])

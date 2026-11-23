@@ -8,7 +8,7 @@ original_database_url = os.environ.get('DATABASE_URL')
 os.environ['DATABASE_URL'] = 'sqlite://'
 
 from app import app, db
-from models import ErrorRecord, Manuscript, Project, Team, User
+from models import ErrorRecord, Manuscript, Project, Team, User, UserTeam
 
 if original_database_url is None:
     os.environ.pop('DATABASE_URL', None)
@@ -37,6 +37,29 @@ def admin_client():
 
     with app.app_context():
         db.session.remove()
+
+
+def test_admin_can_create_user_with_selected_team(admin_client):
+    client, team_id = admin_client
+    response = client.post(
+        '/admin/users',
+        data={
+            'name': 'Pipeline Test User',
+            'email': 'pipeline-test-user@example.test',
+            'employee_code': 'PIPELINE-TEST-USER',
+            'password': 'temporary-test-password',
+            'role': 'staff',
+            'team_ids': [str(team_id)],
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b'User registered successfully.' in response.data
+    with app.app_context():
+        user = User.query.filter_by(email='pipeline-test-user@example.test').first()
+        assert user is not None
+        assert UserTeam.query.filter_by(user_id=user.id, team_id=team_id).first() is not None
 
 
 def create_review_project(team_id, original_text, working_text, old_error=None):
